@@ -1,0 +1,65 @@
+from __future__ import annotations
+
+import logging
+from functools import lru_cache
+
+import uvicorn
+from fastapi import FastAPI, File, HTTPException, UploadFile
+
+from services.bootstrap import AppContext, build_app_context
+
+logger = logging.getLogger(__name__)
+UPLOAD_FILE = File(...)
+
+app = FastAPI(title="Smart Voice Kit API", version="0.1.0")
+
+
+@lru_cache(maxsize=1)
+def get_context() -> AppContext:
+    return build_app_context()
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    context = get_context()
+    return {
+        "status": "ok",
+        "app_name": context.settings.app_name,
+        "asr_backend": context.service.asr_engine.backend_name,
+    }
+
+
+@app.post("/transcribe/file")
+async def transcribe_file(file: UploadFile = UPLOAD_FILE, language: str | None = None) -> dict:
+    filename = file.filename or "input.wav"
+    if not filename.lower().endswith(".wav"):
+        raise HTTPException(status_code=400, detail="Only WAV files are supported right now.")
+
+    try:
+        payload = await file.read()
+        result = get_context().service.transcribe_bytes(
+            payload,
+            filename=filename,
+            language=language,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    except Exception as error:  # pragma: no cover - defensive API boundary
+        logger.exception("API transcription failed for %s", filename)
+        raise HTTPException(status_code=500, detail="Local transcription failed.") from error
+
+    return result.model_dump(mode="json")
+
+
+def run() -> None:
+    context = get_context()
+    uvicorn.run(
+        "app.api.main:app",
+        host=context.settings.api.host,
+        port=context.settings.api.port,
+        reload=False,
+    )
+
+
+if __name__ == "__main__":
+    run()

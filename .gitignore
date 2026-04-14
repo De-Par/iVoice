@@ -1,0 +1,19 @@
+# Project cache dirs
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.DS_Store
+
+# Local artifacts
+runs/*
+!runs/.gitkeep
+data/*
+!data/.gitkeep
+samples/*
+!samples/.gitkeep
+
+# Temp files
+*.log
+*.tmp

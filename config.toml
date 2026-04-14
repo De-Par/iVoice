@@ -1,0 +1,28 @@
+app_name = "smart-voice-kit"
+
+[asr]
+backend = "faster_whisper"
+model_name = "tiny"  # tiny / base / small / ...
+model_path = ""
+device = "auto"
+compute_type = "int8"
+language = ""
+beam_size = 5
+cpu_threads = 0
+num_workers = 1
+download_root = "data/models/asr"
+local_files_only = true
+preload_on_startup = false
+
+[storage]
+runs_dir = "runs"
+data_dir = "data"
+samples_dir = "samples"
+
+[logging]
+level = "INFO"
+rich = true
+
+[api]
+host = "127.0.0.1"
+port = 8000
