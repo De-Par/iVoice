@@ -27,9 +27,7 @@ def build_app_context(
         updated_asr = settings.asr.model_copy(
             update={"local_files_only": asr_local_files_only_override}
         )
-        settings = settings.model_copy(
-            update={"asr": updated_asr}
-        )
+        settings = settings.model_copy(update={"asr": updated_asr})
     configure_logging(settings.logging)
     asr_engine = build_asr_engine(settings)
     service = TranscriptionService(settings=settings, asr_engine=asr_engine)

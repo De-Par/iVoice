@@ -81,8 +81,7 @@ class FasterWhisperAssetPreparer:
         if self.settings.model_path is not None:
             if not self.settings.model_path.exists():
                 raise FileNotFoundError(
-                    "Configured ASR model_path does not exist: "
-                    f"{self.settings.model_path}"
+                    f"Configured ASR model_path does not exist: {self.settings.model_path}"
                 )
             download_root = (
                 str(self.settings.download_root) if self.settings.download_root else None

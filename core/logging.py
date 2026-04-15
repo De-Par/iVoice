@@ -24,4 +24,3 @@ def configure_logging(settings: LoggingSettings) -> None:
         handlers=handlers,
         force=True,
     )
-

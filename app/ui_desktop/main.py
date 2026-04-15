@@ -34,8 +34,10 @@ try:  # pragma: no cover - import guard for optional runtime dependency
         QVBoxLayout,
         QWidget,
     )
+
     PYSIDE_IMPORT_ERROR = None
 except ImportError as error:  # pragma: no cover - handled at runtime
+
     class _QtPlaceholder:
         def __init__(self, *args, **kwargs) -> None:
             pass
@@ -920,9 +922,7 @@ class VoiceDesktopWindow(QMainWindow):
         }
         duration = self.current_audio_stats["duration"]
         sample_rate = self.current_audio_stats["sample_rate"]
-        self.audio_summary.setText(
-            f"{audio_path.name}  •  {duration}  •  {sample_rate}"
-        )
+        self.audio_summary.setText(f"{audio_path.name}  •  {duration}  •  {sample_rate}")
         self._refresh_details_panel()
 
     def _refresh_details_panel(self) -> None:
