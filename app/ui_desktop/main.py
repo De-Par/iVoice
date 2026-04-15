@@ -304,6 +304,15 @@ class VoiceDesktopWindow(QMainWindow):
                 background: #ec4828;
                 border: 1px solid #ec4828;
             }
+            QPushButton#recordButton {
+                background: #f4f6fa;
+                color: #1f1f1f;
+                border: 1px solid #e2e7ef;
+            }
+            QPushButton#recordButton:hover {
+                background: #eceff4;
+                border: 1px solid #d7dee8;
+            }
             QPushButton#playButton {
                 background: #22c55e;
                 color: white;
@@ -425,8 +434,8 @@ class VoiceDesktopWindow(QMainWindow):
 
         self.input_device_combo = QComboBox()
         self.record_button = QPushButton("Record")
-        self.stop_button = QPushButton("Stop")
-        self.stop_button.setObjectName("dangerButton")
+        self.record_button.setObjectName("recordButton")
+        self.record_button.setProperty("active", False)
         self.play_button = QPushButton("▶")
         self.play_button.setObjectName("playButton")
         self.play_button.setProperty("active", False)
@@ -443,7 +452,6 @@ class VoiceDesktopWindow(QMainWindow):
         button_row = QHBoxLayout()
         button_row.setSpacing(10)
         button_row.addWidget(self.record_button)
-        button_row.addWidget(self.stop_button)
         button_row.addWidget(self.open_button)
         button_row.addWidget(self.transcribe_button)
 
@@ -497,12 +505,10 @@ class VoiceDesktopWindow(QMainWindow):
 
         self._build_details_dock()
 
-        self.stop_button.setEnabled(False)
         self.play_button.setEnabled(False)
         self.transcribe_button.setEnabled(False)
 
-        self.record_button.clicked.connect(self.start_recording)
-        self.stop_button.clicked.connect(self.stop_recording)
+        self.record_button.clicked.connect(self.toggle_recording)
         self.play_button.clicked.connect(self.play_audio)
         self.open_button.clicked.connect(self.open_wav)
         self.transcribe_button.clicked.connect(self.transcribe_current_audio)
@@ -568,8 +574,7 @@ class VoiceDesktopWindow(QMainWindow):
     @Slot(object)
     def _handle_recorder_state_changed(self, state: object) -> None:
         is_recording = state == QMediaRecorder.RecorderState.RecordingState
-        self.record_button.setEnabled(not is_recording)
-        self.stop_button.setEnabled(is_recording)
+        self._set_record_button_mode(is_recording)
         has_audio = self.current_audio_path is not None
         is_finalizing = self._record_finalize_path is not None
         self.play_button.setEnabled(has_audio and not is_recording and not is_finalizing)
@@ -586,6 +591,13 @@ class VoiceDesktopWindow(QMainWindow):
     def _handle_playback_state_changed(self, state: object) -> None:
         is_playing = state == QMediaPlayer.PlaybackState.PlayingState
         self._set_play_button_mode(is_playing)
+
+    @Slot()
+    def toggle_recording(self) -> None:
+        if self.recorder.recorderState() == QMediaRecorder.RecorderState.RecordingState:
+            self.stop_recording()
+            return
+        self.start_recording()
 
     def _next_capture_path(self) -> Path:
         capture_dir = self.context.settings.storage.data_dir / "captures"
@@ -772,9 +784,9 @@ class VoiceDesktopWindow(QMainWindow):
     def _set_controls_enabled(self, enabled: bool) -> None:
         recorder_state = self.recorder.recorderState()
         is_recording = recorder_state == QMediaRecorder.RecorderState.RecordingState
-        self.record_button.setEnabled(enabled and not is_recording)
-        self.stop_button.setEnabled(enabled and is_recording)
-        self.open_button.setEnabled(enabled)
+        self.record_button.setEnabled(enabled)
+        self._set_record_button_mode(is_recording)
+        self.open_button.setEnabled(enabled and not is_recording)
         has_audio = self.current_audio_path is not None and self._record_finalize_path is None
         self._set_play_button_visible(has_audio)
         self.play_button.setEnabled(enabled and has_audio)
@@ -795,6 +807,17 @@ class VoiceDesktopWindow(QMainWindow):
             self.play_button.setText("▶")
         self.play_button.style().unpolish(self.play_button)
         self.play_button.style().polish(self.play_button)
+
+    def _set_record_button_mode(self, is_recording: bool) -> None:
+        self.record_button.setProperty("active", is_recording)
+        if is_recording:
+            self.record_button.setText("Stop")
+            self.record_button.setObjectName("dangerButton")
+        else:
+            self.record_button.setText("Record")
+            self.record_button.setObjectName("recordButton")
+        self.record_button.style().unpolish(self.record_button)
+        self.record_button.style().polish(self.record_button)
 
     def _copy_transcript(self) -> None:
         text = self.transcript_box.toPlainText().strip()
