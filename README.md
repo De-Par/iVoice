@@ -2,41 +2,88 @@
 
 # Smart Voice Kit
 
-**Offline-first voice toolkit for smart-device and local assistant prototypes**
+**Offline-first voice toolkit for local assistants, smart-device demos, and voice UX experiments**
 
-[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge)](https://www.python.org/)
-[![faster-whisper](https://img.shields.io/badge/faster--whisper-ASR-16A34A?style=for-the-badge)](https://github.com/SYSTRAN/faster-whisper)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-61718B?style=for-the-badge)](#requirements)
-<br />
+<p>
+  <a href="https://www.python.org/">
+    <img src="https://img.shields.io/badge/Python-3.11%2B-2F6FED?style=for-the-badge" alt="Python 3.11+">
+  </a>
+  <a href="https://github.com/SYSTRAN/faster-whisper">
+    <img src="https://img.shields.io/badge/faster--whisper-Local_ASR-0F9D58?style=for-the-badge" alt="faster-whisper">
+  </a>
+  <a href="#requirements">
+    <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-Supported-5B6475?style=for-the-badge" alt="Platform">
+  </a>
+  <a href="#offline-first-asr">
+    <img src="https://img.shields.io/badge/Offline--first-Ready-111827?style=for-the-badge" alt="Offline-first">
+  </a>
+</p>
 
-[![PySide6](https://img.shields.io/badge/PySide6-Desktop_UI-242378?style=for-the-badge)](https://doc.qt.io/qtforpython-6/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-Web_UI-FF4B4B?style=for-the-badge)](https://docs.streamlit.io/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-HTTP_API-0F766E?style=for-the-badge)](https://fastapi.tiangolo.com/)
-[![Uvicorn](https://img.shields.io/badge/Uvicorn-ASGI_Server-9535E9?style=for-the-badge)](https://www.uvicorn.org/)
-
-`record -> save wav -> transcribe -> show text -> save metadata`
+<p>
+  <a href="https://doc.qt.io/qtforpython-6/">
+    <img src="https://img.shields.io/badge/PySide6-Desktop_UI-4F46E5?style=for-the-badge" alt="PySide6">
+  </a>
+  <a href="https://docs.streamlit.io/">
+    <img src="https://img.shields.io/badge/Streamlit-Web_UI-E85D75?style=for-the-badge" alt="Streamlit">
+  </a>
+  <a href="https://fastapi.tiangolo.com/">
+    <img src="https://img.shields.io/badge/FastAPI-HTTP_API-0F766E?style=for-the-badge" alt="FastAPI">
+  </a>
+  <a href="https://www.uvicorn.org/">
+    <img src="https://img.shields.io/badge/Uvicorn-ASGI_Server-7C3AED?style=for-the-badge" alt="Uvicorn">
+  </a>
+</p>
 
 Built for [Yandex Education Studcamp](https://education.yandex.ru/studcamp-mipt-cshse)
 
 </div>
 
-<p align="center">
-    <img src="https://raw.githubusercontent.com/De-Par/smart-voice-kit/main/assets/images/demo.png" alt="app screenshot" width="50%">
-</p>
 
-Smart Voice Kit is a clean local foundation for voice UX experiments: desktop capture, offline-capable ASR, structured artifacts, and a codebase that can grow into style-aware speech control and TTS without throwing the architecture away.
+## What it is
 
-## Overview
+Smart Voice Kit is a local-first foundation for voice interfaces.
 
-- local ASR via `faster-whisper`
-- desktop UI via `PySide6`
-- browser UI via `Streamlit`
-- CLI via `Typer + Rich`
-- HTTP API via `FastAPI`
-- unified service layer shared by all clients
-- offline-first runtime with explicit model preparation
+It provides a clean, extensible codebase for recording audio, transcribing it with offline-capable ASR, exposing the same functionality through multiple clients, and saving structured run artifacts for later use.
 
-## Quick Start
+The current version focuses on the transcription path, while keeping clear extension points for future style parsing and TTS.
+
+## Why this project
+
+- **Local-first by design** — the normal runtime path does not depend on cloud APIs
+- **One shared service layer** — desktop UI, web UI, CLI, and API reuse the same core logic
+- **Structured outputs** — runs are persisted as artifacts instead of being lost in terminal output
+- **Built to grow** — style-aware speech control and TTS can be added without rewriting the architecture
+
+## Current capabilities
+
+| Area | Status |
+| --- | --- |
+| Audio input | Microphone capture and WAV ingestion |
+| ASR | Local transcription via `faster-whisper` |
+| Clients | Desktop UI, web UI, CLI, FastAPI |
+| Persistence | Run-based artifacts in `runs/` |
+| Config | Runtime parameters in `config.toml` |
+| Extensibility | Reserved interfaces for style parsing and TTS |
+
+## Screenshots
+
+<table align="center">
+  <tr>
+    <td align="center"><b>Desktop UI</b></td>
+    <td align="center"><b>Web UI</b></td>
+  </tr>
+  <tr>
+    <td>
+      <img src="assets/images/demo-desktop.png" alt="Desktop UI" width="100%">
+    </td>
+    <td>
+      <img src="assets/images/demo-web.png" alt="Web UI" width="100%">
+    </td>
+  </tr>
+</table>
+
+
+## Quick start
 
 ```bash
 python -m venv .venv
@@ -46,44 +93,6 @@ voice-cli prepare-asr
 voice-desktop
 ```
 
-## Feature Map
-
-| Area | What is available now |
-| --- | --- |
-| Audio capture | Desktop recording and WAV ingestion |
-| ASR | Local transcription via `faster-whisper` |
-| Clients | Desktop UI, Streamlit UI, CLI, FastAPI |
-| Storage | Run-based local artifacts in `runs/` |
-| Configuration | TOML config via `config.toml` |
-| Extensibility | Reserved interfaces for style parsing and TTS |
-
-## Architecture
-
-| Layer | Responsibility |
-| --- | --- |
-| `app/ui_desktop/` | Primary local desktop client |
-| `app/ui_streamlit/` | Secondary browser client |
-| `app/tui/` | CLI commands |
-| `app/api/` | HTTP API |
-| `core/audio/` | WAV I/O and audio utilities |
-| `core/asr/` | ASR interfaces and backends |
-| `core/style/` | Style parsing extension point |
-| `core/tts/` | TTS extension point |
-| `services/` | Orchestration and artifact persistence |
-| `schemas/` | Pydantic models and structured results |
-
-Key design rules:
-
-- all clients call the same business logic
-- backend-specific code is isolated behind interfaces
-- operations return structured models instead of ad-hoc prints
-- future style and TTS work can be added without reshaping the whole app
-
-## Requirements
-
-- Python 3.11+
-- macOS or Linux
-- `ffmpeg` is recommended for `faster-whisper`
 
 ## Installation
 
@@ -93,19 +102,27 @@ Minimal install:
 pip install -e .
 ```
 
-Install with development tools:
+Development install:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-Runtime parameters live in [config.toml](/Users/Mand/Desktop/TTS/config.toml:1).
+Runtime configuration lives in [`config.toml`](./config.toml).
+
+
+## Requirements
+
+- Python 3.11+
+- macOS or Linux
+- `ffmpeg` recommended for `faster-whisper`
+
 
 ## Offline-first ASR
 
-By default the runtime uses `local_files_only = true`, so regular transcription does not need network access after the model is prepared once.
+By default, the runtime uses `local_files_only = true`, so regular transcription can run without network access after the model is prepared once.
 
-Prepare the local cache:
+Prepare the local model cache:
 
 ```bash
 voice-cli prepare-asr
@@ -117,23 +134,24 @@ Force a redownload:
 voice-cli prepare-asr --force
 ```
 
-If you want fully explicit local model resolution, set `asr.model_path` to a converted local `faster-whisper` model directory.
+For fully explicit local model resolution, set `asr.model_path` to a converted local `faster-whisper` model directory.
+
 
 ## Running
 
-Desktop UI:
+### Desktop UI
 
 ```bash
 voice-desktop
 ```
 
-Streamlit UI:
+### Web UI
 
 ```bash
 streamlit run app/ui_streamlit/main.py
 ```
 
-CLI:
+### CLI
 
 ```bash
 voice-cli prepare-asr
@@ -141,7 +159,7 @@ voice-cli transcribe-file samples/example.wav
 voice-cli transcribe-last
 ```
 
-API:
+### API
 
 ```bash
 voice-api
@@ -149,9 +167,107 @@ curl http://127.0.0.1:8000/health
 curl -X POST http://127.0.0.1:8000/transcribe/file -F "file=@samples/example.wav"
 ```
 
-## Metadata Schema
 
-`metadata.json` includes:
+## Runtime flow
+
+```mermaid
+flowchart LR
+    A[Record audio<br/>or open WAV] --> B[Save local WAV artifact]
+    B --> C[Run local ASR<br/>faster-whisper]
+    C --> D[Return structured result]
+    D --> E[Show transcript in client]
+    D --> F[Persist metadata.json]
+```
+
+
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph Clients
+        A[PySide6 Desktop UI]
+        B[Streamlit Web UI]
+        C[Typer CLI]
+        D[FastAPI HTTP API]
+    end
+
+    subgraph Services
+        E[Transcription service]
+        F[Artifact persistence]
+    end
+
+    subgraph Core
+        G[core/audio]
+        H[core/asr]
+        I[core/style]
+        J[core/tts]
+    end
+
+    subgraph Schemas
+        K[Pydantic models]
+    end
+
+    A --> E
+    B --> E
+    C --> E
+    D --> E
+
+    E --> G
+    E --> H
+    E --> I
+    E --> J
+    E --> F
+    E --> K
+    F --> K
+```
+
+
+## Repository layout
+
+```text
+smart-voice-kit/
+├── app/
+│   ├── api/                  # FastAPI application and HTTP routes
+│   ├── tui/                  # CLI commands and terminal workflows
+│   ├── ui_desktop/           # PySide6 desktop client
+│   └── ui_streamlit/         # Streamlit web client
+├── core/
+│   ├── audio/                # WAV I/O and audio helpers
+│   ├── asr/                  # ASR interfaces and backend implementations
+│   ├── style/                # future style parsing extension point
+│   └── tts/                  # future TTS extension point
+├── services/                 # orchestration and artifact persistence
+├── schemas/                  # Pydantic models and structured results
+├── assets/
+│   └── images/               # README screenshots and visual assets
+├── runs/                     # generated run artifacts and metadata
+├── data/                     # local data and prepared resources
+├── samples/                  # example WAV files for testing
+├── config.toml               # runtime configuration
+├── pyproject.toml            # project metadata and dependencies
+└── README.md                 # project overview and usage guide
+```
+
+
+## Project structure by responsibility
+
+| Path | Responsibility |
+| --- | --- |
+| `app/ui_desktop/` | Primary local desktop client |
+| `app/ui_streamlit/` | Secondary browser client |
+| `app/tui/` | CLI entrypoints |
+| `app/api/` | HTTP API surface |
+| `core/audio/` | WAV I/O and audio utilities |
+| `core/asr/` | ASR interfaces and backends |
+| `core/style/` | Future style parsing extension point |
+| `core/tts/` | Future TTS extension point |
+| `services/` | Orchestration and artifact persistence |
+| `schemas/` | Structured models and result schemas |
+
+
+## Metadata schema
+
+Each run writes a `metadata.json` artifact with fields such as:
 
 - `id`
 - `timestamp`
@@ -164,25 +280,14 @@ curl -X POST http://127.0.0.1:8000/transcribe/file -F "file=@samples/example.wav
 - `asr_backend`
 - `model_name`
 
-## Repository Layout
 
-```text
-app/
-  api/
-  tui/
-  ui_desktop/
-  ui_streamlit/
-core/
-  audio/
-  asr/
-  style/
-  tts/
-services/
-schemas/
-runs/
-data/
-samples/
-```
+## Design principles
+
+- all clients call the same business logic
+- backend-specific code stays behind interfaces
+- operations return structured models, not ad-hoc prints
+- future style parsing and TTS should plug into the same flow cleanly
+
 
 ## Development
 
@@ -191,15 +296,10 @@ ruff check .
 ruff format .
 ```
 
+
 ## Roadmap
 
 - style-aware prompt parsing for speech control
 - local TTS backends behind a shared interface
 - richer audio preprocessing hooks
 - more device-oriented runtime flows beyond plain WAV transcription
-
-## Notes
-
-- the current runtime supports WAV input only
-- `maybe_normalize_audio()` is intentionally a no-op for now
-- style parsing and TTS are reserved in the architecture, but not active in runtime yet
