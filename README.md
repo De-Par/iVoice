@@ -6,31 +6,29 @@
 
 <p>
   <a href="https://www.python.org/">
-    <img src="https://img.shields.io/badge/Python-3.11%2B-2F6FED?style=for-the-badge" alt="Python 3.11+">
+    <img src="https://img.shields.io/badge/Python-3.11%2B-2563EB?style=for-the-badge" alt="Python 3.11+">
   </a>
   <a href="https://github.com/SYSTRAN/faster-whisper">
-    <img src="https://img.shields.io/badge/faster--whisper-Local_ASR-0F9D58?style=for-the-badge" alt="faster-whisper">
+    <img src="https://img.shields.io/badge/faster--whisper-Local_ASR-22C55E?style=for-the-badge" alt="faster-whisper">
   </a>
   <a href="#requirements">
-    <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-Supported-5B6475?style=for-the-badge" alt="Platform">
+    <img src="https://img.shields.io/badge/macOS%20%7C%20Linux-Supported-F97316?style=for-the-badge" alt="Platform">
   </a>
   <a href="#offline-first-asr">
-    <img src="https://img.shields.io/badge/Offline--first-Ready-111827?style=for-the-badge" alt="Offline-first">
-  </a>
 </p>
 
 <p>
   <a href="https://doc.qt.io/qtforpython-6/">
-    <img src="https://img.shields.io/badge/PySide6-Desktop_UI-4F46E5?style=for-the-badge" alt="PySide6">
+    <img src="https://img.shields.io/badge/PySide6-Desktop_UI-7C3AED?style=for-the-badge" alt="PySide6">
   </a>
   <a href="https://docs.streamlit.io/">
-    <img src="https://img.shields.io/badge/Streamlit-Web_UI-E85D75?style=for-the-badge" alt="Streamlit">
+    <img src="https://img.shields.io/badge/Streamlit-Web_UI-F43F5E?style=for-the-badge" alt="Streamlit">
   </a>
   <a href="https://fastapi.tiangolo.com/">
-    <img src="https://img.shields.io/badge/FastAPI-HTTP_API-0F766E?style=for-the-badge" alt="FastAPI">
+    <img src="https://img.shields.io/badge/FastAPI-HTTP_API-C7AD04?style=for-the-badge" alt="FastAPI">
   </a>
   <a href="https://www.uvicorn.org/">
-    <img src="https://img.shields.io/badge/Uvicorn-ASGI_Server-7C3AED?style=for-the-badge" alt="Uvicorn">
+    <img src="https://img.shields.io/badge/Uvicorn-ASGI_Server-06B6D4?style=for-the-badge" alt="Uvicorn">
   </a>
 </p>
 
