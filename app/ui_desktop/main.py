@@ -152,8 +152,8 @@ class VoiceDesktopWindow(QMainWindow):
         self.player.setAudioOutput(self.audio_output)
         self.audio_output.setVolume(1.0)
 
-        self.setWindowTitle("Smart Voice Kit")
-        self.resize(1080, 660)
+        self.setWindowTitle("iVoice")
+        self.resize(480, 640)
         self._apply_styles()
         self._build_ui()
         self._load_audio_inputs()
@@ -382,9 +382,9 @@ class VoiceDesktopWindow(QMainWindow):
         hero_layout.setContentsMargins(24, 24, 24, 24)
         hero_layout.setSpacing(10)
 
-        title = QLabel("Smart Voice Kit")
+        title = QLabel("iVoice")
         title.setObjectName("titleLabel")
-        subtitle = QLabel("Local recording, local playback, offline-first ASR.")
+        subtitle = QLabel("Instruction-driven speech starts with local capture and analysis.")
         subtitle.setObjectName("subtitleLabel")
         self.notification_bar = QFrame()
         self.notification_bar.setObjectName("notificationBar")
@@ -430,7 +430,7 @@ class VoiceDesktopWindow(QMainWindow):
         grid.setColumnStretch(0, 0)
         grid.setColumnStretch(1, 1)
         self.language_input = QLineEdit()
-        self.language_input.setPlaceholderText("Language (optional)")
+        self.language_input.setPlaceholderText("Language hint (optional)")
 
         self.input_device_combo = QComboBox()
         self.record_button = QPushButton("Record")
@@ -687,8 +687,9 @@ class VoiceDesktopWindow(QMainWindow):
         audio_path = self.current_audio_path
         if getattr(self.context.service.asr_engine, "_model", None) is None:
             self._show_notification(
-                "Cold start: initializing local ASR. This may take a bit.",
+                "Cold start: loading local speech analysis. This may take a bit.",
                 variant="cold",
+                auto_hide_ms=5000,
             )
         else:
             self._hide_notification()
@@ -759,9 +760,9 @@ class VoiceDesktopWindow(QMainWindow):
         self.copy_button.setEnabled(bool(self.last_run.metadata.transcript.strip()))
         if prepare_payload is not None:
             self._show_notification(
-                "Local ASR model prepared.",
+                "Local speech model prepared.",
                 variant="download",
-                auto_hide_ms=6500,
+                auto_hide_ms=5000,
             )
         else:
             self._hide_notification()
@@ -826,6 +827,12 @@ class VoiceDesktopWindow(QMainWindow):
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
 
+        self._show_notification(
+            "Transcript copied.",
+            variant="cold",
+            auto_hide_ms=1500,
+        )
+
     def _set_transcribe_button_mode(self, is_running: bool) -> None:
         if is_running:
             self.transcribe_button.setText("Stop")
@@ -842,7 +849,7 @@ class VoiceDesktopWindow(QMainWindow):
         self._show_notification(
             "Stop requested. Waiting for the current step to finish.",
             variant="download",
-            auto_hide_ms=9000,
+            auto_hide_ms=5000,
         )
         self._set_status("Stopping")
 
@@ -851,7 +858,7 @@ class VoiceDesktopWindow(QMainWindow):
         text: str,
         *,
         variant: str = "cold",
-        auto_hide_ms: int = 9000,
+        auto_hide_ms: int = 5000,
     ) -> None:
         self._notification_timer.stop()
         self.notification_text.setText(text)
@@ -875,7 +882,7 @@ class VoiceDesktopWindow(QMainWindow):
             run = self.context.service.transcribe_file(audio_path, language=language)
             return {"run": run}
         except RuntimeError as error:
-            if "Local ASR model is not available" not in str(error):
+            if "Local speech model is not available" not in str(error):
                 raise
 
         prepare_context = build_app_context(asr_local_files_only_override=False)

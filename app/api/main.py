@@ -11,7 +11,7 @@ from services.bootstrap import AppContext, build_app_context
 logger = logging.getLogger(__name__)
 UPLOAD_FILE = File(...)
 
-app = FastAPI(title="Smart Voice Kit API", version="0.1.0")
+app = FastAPI(title="iVoice API", version="0.1.0")
 
 
 @lru_cache(maxsize=1)

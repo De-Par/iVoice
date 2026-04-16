@@ -9,4 +9,4 @@ class BaseTTSEngine(ABC):
 
     @abstractmethod
     def synthesize(self, text: str, **kwargs) -> dict:
-        """Synthesize speech and return structured artifact metadata"""
+        """Generate speech artifacts from text and optional structured style controls."""

@@ -76,7 +76,7 @@ class FasterWhisperASREngine(BaseASREngine):
             except Exception as error:
                 if self.local_files_only:
                     raise RuntimeError(
-                        "Local ASR model is not available. Run `voice-cli prepare-asr` once "
+                        "Local speech model is not available. Run `voice-cli prepare-asr` once "
                         "with internet access or set `asr.model_path` to a local converted "
                         "faster-whisper model directory."
                     ) from error

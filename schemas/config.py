@@ -61,7 +61,7 @@ class APISettings(BaseModel):
 class AppSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    app_name: str = "smart-voice-kit"
+    app_name: str = "iVoice"
     asr: ASRSettings = ASRSettings()
     storage: StorageSettings = StorageSettings()
     logging: LoggingSettings = LoggingSettings()

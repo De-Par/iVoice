@@ -6,4 +6,4 @@ from abc import ABC, abstractmethod
 class BaseStyleParser(ABC):
     @abstractmethod
     def parse(self, instruction: str) -> dict:
-        """Parse future expressive speech/style instructions into structured controls"""
+        """Parse natural-language synthesis instructions into structured speech controls."""

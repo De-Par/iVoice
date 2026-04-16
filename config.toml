@@ -1,4 +1,4 @@
-app_name = "smart-voice-kit"
+app_name = "iVoice"
 
 [asr]
 backend = "faster_whisper"
