@@ -44,6 +44,22 @@ def copy_audio_file(source_path: Path, output_path: Path) -> Path:
     return output_path
 
 
+def ensure_wav_path(source_path: Path) -> Path:
+    source = source_path.expanduser().resolve()
+    if not source.exists():
+        raise FileNotFoundError(f"Audio file not found: {source}")
+    if source.suffix.lower() != ".wav":
+        raise ValueError("Only WAV files are supported right now.")
+    return source
+
+
+def ensure_wav_filename(filename: str) -> str:
+    normalized = filename.strip() or "input.wav"
+    if not normalized.lower().endswith(".wav"):
+        raise ValueError("Only WAV files are supported right now.")
+    return normalized
+
+
 def get_audio_duration(audio_path: Path) -> float:
     with wave.open(str(audio_path), "rb") as wav_file:
         frame_count = wav_file.getnframes()

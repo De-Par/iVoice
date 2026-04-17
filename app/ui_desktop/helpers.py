@@ -3,25 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from core.formatting import format_bytes
 from schemas.runtime import ASRPreparationResult
 from schemas.transcription import TranscriptionRun
 from services.bootstrap import AppContext
-
-
-def format_bytes(value: int) -> str:
-    size = float(value)
-    units = ["B", "KB", "MB", "GB", "TB"]
-    for unit in units:
-        if size < 1024.0 or unit == units[-1]:
-            return f"{size:.1f} {unit}"
-        size /= 1024.0
-    return f"{value} B"
-
-
-def format_dbfs(value: float | None) -> str:
-    if value is None:
-        return "n/a"
-    return f"{value:.1f} dBFS"
 
 
 def build_details_text(
@@ -50,7 +35,9 @@ def build_details_text(
     )
 
     device_text = "<none>"
-    if 0 <= current_device_index < len(input_devices):
+    if not input_devices:
+        device_text = "<not initialized>"
+    elif 0 <= current_device_index < len(input_devices):
         device_text = input_devices[current_device_index].description()
     sections.append("[Audio Input]\n" + f"device: {device_text}")
 

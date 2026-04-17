@@ -6,6 +6,7 @@ from functools import lru_cache
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, UploadFile
 
+from core.audio import ensure_wav_filename
 from services.bootstrap import AppContext, build_app_context
 
 logger = logging.getLogger(__name__)
@@ -31,11 +32,8 @@ def health() -> dict[str, str]:
 
 @app.post("/transcribe/file")
 async def transcribe_file(file: UploadFile = UPLOAD_FILE, language: str | None = None) -> dict:
-    filename = file.filename or "input.wav"
-    if not filename.lower().endswith(".wav"):
-        raise HTTPException(status_code=400, detail="Only WAV files are supported right now.")
-
     try:
+        filename = ensure_wav_filename(file.filename or "input.wav")
         payload = await file.read()
         result = get_context().service.transcribe_bytes(
             payload,

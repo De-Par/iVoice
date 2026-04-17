@@ -32,5 +32,5 @@ def build_app_context(
     asr_engine = build_asr_engine(settings)
     service = TranscriptionService(settings=settings, asr_engine=asr_engine)
     if settings.asr.preload_on_startup:
-        service.prepare_asr()
+        service.warm_up_asr()
     return AppContext(settings=settings, service=service)

@@ -13,6 +13,7 @@ from huggingface_hub.utils import (
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TextColumn
 
+from core.formatting import format_bytes
 from schemas.config import ASRSettings
 from schemas.runtime import ASRPreparationResult
 
@@ -56,16 +57,6 @@ def suppress_hf_progress_bars():
     finally:
         if not were_disabled:
             enable_progress_bars()
-
-
-def format_bytes(value: int) -> str:
-    size = float(value)
-    units = ["B", "KB", "MB", "GB", "TB"]
-    for unit in units:
-        if size < 1024.0 or unit == units[-1]:
-            return f"{size:.1f} {unit}"
-        size /= 1024.0
-    return f"{value} B"
 
 
 class FasterWhisperAssetPreparer:

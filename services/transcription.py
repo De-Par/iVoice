@@ -6,9 +6,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from rich.console import Console
+
 from core.asr.base import BaseASREngine
 from core.audio import (
     copy_audio_file,
+    ensure_wav_path,
     get_audio_duration,
     get_audio_sample_rate,
     maybe_normalize_audio,
@@ -17,6 +20,7 @@ from core.audio import (
 from schemas.config import AppSettings
 from schemas.runtime import ASRPreparationResult
 from schemas.transcription import RunMetadata, TranscriptionRun
+from services.asr_preparation import prepare_asr_assets
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +36,7 @@ class TranscriptionService:
         filename: str | None = None,
         language: str | None = None,
     ) -> TranscriptionRun:
-        run_id, timestamp, run_dir = self._create_run_dir()
-        audio_path = run_dir / "input.wav"
+        run_id, timestamp, run_dir, audio_path = self._create_run_input()
 
         logger.info(
             "Saving uploaded audio for run_id=%s filename=%s",
@@ -41,12 +44,11 @@ class TranscriptionService:
             filename or "input.wav",
         )
         save_uploaded_audio(audio_bytes, audio_path)
-        normalized_audio_path = maybe_normalize_audio(audio_path)
-        return self._transcribe_saved_audio(
+        return self._transcribe_run_audio(
             run_id=run_id,
             timestamp=timestamp,
             run_dir=run_dir,
-            audio_path=normalized_audio_path,
+            audio_path=audio_path,
             language=language,
         )
 
@@ -55,23 +57,16 @@ class TranscriptionService:
         source_path: str | Path,
         language: str | None = None,
     ) -> TranscriptionRun:
-        source = Path(source_path).expanduser().resolve()
-        if not source.exists():
-            raise FileNotFoundError(f"Audio file not found: {source}")
-        if source.suffix.lower() != ".wav":
-            raise ValueError("Only WAV files are supported right now.")
-
-        run_id, timestamp, run_dir = self._create_run_dir()
-        audio_path = run_dir / "input.wav"
+        source = ensure_wav_path(Path(source_path))
+        run_id, timestamp, run_dir, audio_path = self._create_run_input()
 
         logger.info("Copying source audio for run_id=%s source=%s", run_id, source)
         copy_audio_file(source, audio_path)
-        normalized_audio_path = maybe_normalize_audio(audio_path)
-        return self._transcribe_saved_audio(
+        return self._transcribe_run_audio(
             run_id=run_id,
             timestamp=timestamp,
             run_dir=run_dir,
-            audio_path=normalized_audio_path,
+            audio_path=audio_path,
             language=language,
         )
 
@@ -79,14 +74,34 @@ class TranscriptionService:
         latest_audio_path = self.get_last_audio_path()
         return self.transcribe_file(latest_audio_path, language=language)
 
-    def prepare_asr(self) -> ASRPreparationResult:
+    def prepare_asr_assets(
+        self,
+        *,
+        force_download: bool = False,
+        console: Console | None = None,
+    ) -> ASRPreparationResult:
         logger.info(
-            "Preparing ASR backend=%s model=%s local_files_only=%s",
+            "Preparing ASR assets backend=%s model=%s",
+            self.asr_engine.backend_name,
+            self.asr_engine.model_name,
+        )
+        return prepare_asr_assets(
+            self.settings,
+            force_download=force_download,
+            console=console,
+        )
+
+    def warm_up_asr(self) -> ASRPreparationResult:
+        logger.info(
+            "Warming up ASR backend=%s model=%s local_files_only=%s",
             self.asr_engine.backend_name,
             self.asr_engine.model_name,
             getattr(self.asr_engine, "local_files_only", None),
         )
         return self.asr_engine.prepare()
+
+    def prepare_asr(self) -> ASRPreparationResult:
+        return self.warm_up_asr()
 
     def get_last_audio_path(self) -> Path:
         run_dirs = sorted(
@@ -108,6 +123,27 @@ class TranscriptionService:
         run_dir = self.settings.storage.runs_dir / run_id
         run_dir.mkdir(parents=True, exist_ok=False)
         return run_id, timestamp, run_dir
+
+    def _create_run_input(self) -> tuple[str, datetime, Path, Path]:
+        run_id, timestamp, run_dir = self._create_run_dir()
+        return run_id, timestamp, run_dir, run_dir / "input.wav"
+
+    def _transcribe_run_audio(
+        self,
+        run_id: str,
+        timestamp: datetime,
+        run_dir: Path,
+        audio_path: Path,
+        language: str | None = None,
+    ) -> TranscriptionRun:
+        normalized_audio_path = maybe_normalize_audio(audio_path)
+        return self._transcribe_saved_audio(
+            run_id=run_id,
+            timestamp=timestamp,
+            run_dir=run_dir,
+            audio_path=normalized_audio_path,
+            language=language,
+        )
 
     def _transcribe_saved_audio(
         self,

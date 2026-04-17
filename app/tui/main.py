@@ -7,11 +7,12 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from core.formatting import format_bytes
 from core.settings import load_settings
 from schemas.config import AppSettings
 from schemas.runtime import ASRPreparationResult
 from schemas.transcription import TranscriptionRun
-from services.asr_assets import FasterWhisperAssetPreparer, format_bytes
+from services.asr_preparation import prepare_asr_assets
 from services.bootstrap import build_app_context
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
@@ -89,8 +90,7 @@ def prepare_asr(
 
     try:
         settings = _load_settings()
-        preparer = FasterWhisperAssetPreparer(settings.asr, console=console)
-        result = preparer.prepare(force_download=force)
+        result = prepare_asr_assets(settings, force_download=force, console=console)
     except Exception as error:
         console.print(f"[red]ASR preparation failed:[/red] {error}")
         raise typer.Exit(code=1) from error
