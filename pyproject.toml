@@ -9,26 +9,43 @@ description = "Instruction-driven speech generation foundation with local-first 
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastapi>=0.115.0",
-    "faster-whisper>=1.1.0",
+    "huggingface-hub>=0.26.0",
     "pydantic>=2.8.0",
-    "PySide6>=6.8.0",
-    "python-multipart>=0.0.9",
     "rich>=13.7.0",
-    "streamlit>=1.39.0",
     "typer>=0.12.3",
-    "uvicorn>=0.30.0",
 ]
 
 [project.optional-dependencies]
+asr = [
+    "faster-whisper>=1.1.0",
+]
+translation = [
+    "sacremoses>=0.1.1",
+    "sentencepiece>=0.2.0",
+    "torch>=2.3.0",
+    "transformers>=4.46.0",
+]
+desktop = [
+    "PySide6>=6.8.0",
+]
+web = [
+    "streamlit>=1.39.0",
+]
+api = [
+    "fastapi>=0.115.0",
+    "python-multipart>=0.0.9",
+    "uvicorn>=0.30.0",
+]
 dev = [
     "ruff>=0.6.0",
 ]
 
 [project.scripts]
-voice-cli = "app.tui.main:run"
-voice-api = "app.api.main:run"
-voice-desktop = "app.ui_desktop.main:run"
+ivoice-cli = "app.terminal_ui.main:run"
+ivoice-api = "app.api.main:run"
+ivoice-desktop = "app.desktop_ui.main:run"
+ivoice-web = "services.web_app:run"
+ivoice-install-model = "services.install_model:run"
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "core", "services", "schemas"]

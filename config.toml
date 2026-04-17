@@ -1,28 +1,129 @@
+# Human-readable application name used in UI titles and API metadata
 app_name = "iVoice"
 
+
+# =============================================================================
 [asr]
-backend = "faster_whisper"
-model_name = "base"  # tiny / base / small / ...
+# =============================================================================
+
+# Speech recognition task family. `whisper` is currently supported
+family = "whisper"
+
+# Runtime provider implementation for the selected ASR family
+provider = "faster_whisper"
+
+# Concrete local model identifier. Common values: `tiny`, `base`, `small`, `medium`, `large-v3`
+model_name = "base"
+
+# Optional path to a preconverted local model directory. Leave empty to use the managed cache below
 model_path = ""
+
+# Execution device. Typical values: `auto`, `cpu`, `cuda`, `mps`
 device = "auto"
+
+# Compute profile for the provider. Common values: `int8`, `int8_float16`, `float16`, `float32`
 compute_type = "int8"
+
+# Force a normalized language code such as `ru`, `en`, `sv`. Leave empty for auto-detection
 language = ""
+
+# Decoder beam size. Higher values may improve accuracy, but they also increase latency
 beam_size = 5
-cpu_threads = 8  # max num threads for one task
-num_workers = 1  # how many parallel transcription tasks can run
-download_root = "data/models/asr"
+
+# Maximum CPU threads used by a single transcription job
+cpu_threads = 4
+
+# Number of parallel ASR worker jobs allowed by the runtime
+num_workers = 1
+
+# Persistent cache root for prepared ASR models of this task/family
+download_root = "data/models/asr/whisper"
+
+# When `true`, ASR only loads already cached local files and never reaches the network
 local_files_only = true
+
+# When `true`, preload the ASR runtime during app startup instead of the first request
 preload_on_startup = false
 
+
+# =============================================================================
+[translation]
+# =============================================================================
+
+# Enable or disable the translation stage after transcription
+enabled = true
+
+# Translation task family. Supported values: `m2m100`, `opus_mt`
+family = "opus_mt"
+
+# Runtime provider implementation for the selected translation family
+provider = "transformers"
+
+# Concrete translation model identifier
+# Examples:
+# - `facebook/m2m100_418M`
+# - `Helsinki-NLP/opus-mt-ru-en`
+model_name = "Helsinki-NLP/opus-mt-ru-en"
+
+# Optional path to a fully local translation model directory. Leave empty to use the managed cache below
+model_path = ""
+
+# Optional source language override in normalized form (`ru`, `en`, etc). Leave empty for auto/implicit source handling
+source_language = ""
+
+# Output language for translation. The pipeline expects normalized labels such as `en`
+target_language = "en"
+
+# Execution device. Typical values: `auto`, `cpu`, `cuda`, `mps`
+device = "auto"
+
+# Maximum CPU threads used by PyTorch translation inference. `0` keeps the runtime default
+cpu_threads = 4
+
+# Maximum generated token length for translated output
+max_length = 256
+
+# Persistent cache root for prepared translation models of this task/family
+download_root = "data/models/translation/opus_mt"
+
+# When `true`, translation only loads already cached local files and never reaches the network
+local_files_only = true
+
+# When `true`, preload the translation runtime during app startup instead of the first request
+preload_on_startup = false
+
+
+# =============================================================================
 [storage]
+# =============================================================================
+
+# Directory with persistent run artifacts: input audio, transcript, translated transcript, metadata
 runs_dir = "runs"
+
+# Root storage for runtime data such as model caches and other local assets
 data_dir = "data"
+
+# Optional folder for manually curated sample inputs
 samples_dir = "samples"
 
+
+# =============================================================================
 [logging]
+# =============================================================================
+
+# Global application log level
 level = "INFO"
+
+# Enable Rich formatting for terminal logs and CLI output
 rich = true
 
+
+# =============================================================================
 [api]
+# =============================================================================
+
+# HTTP bind host for the FastAPI application
 host = "127.0.0.1"
+
+# HTTP bind port for the FastAPI application
 port = 8000
