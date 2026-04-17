@@ -1,45 +1,38 @@
-<div align="center">
-  <h1>iVoice</h1>
-  <p><strong>Instruction-driven speech foundation with local audio capture, transcription, and reusable runtime artifacts</strong></p>
+# iVoice - Instruction-driven speech foundation with local audio processing
 
-  <p>
+<p>
     <a href="https://www.python.org/">
-      <img src="https://img.shields.io/badge/Python-3.11%2B-2563EB?style=flat-square" alt="Python 3.11+">
+        <img src="https://img.shields.io/badge/Python-3.11%2B-2563EB?style=flat-square" alt="Python 3.11+">
     </a>
     <a href="https://github.com/SYSTRAN/faster-whisper">
-      <img src="https://img.shields.io/badge/ASR-faster--whisper-234355?style=flat-square" alt="ASR">
+        <img src="https://img.shields.io/badge/ASR-faster--whisper-234355?style=flat-square" alt="ASR">
     </a>
     <a href="./config.toml">
-      <img src="https://img.shields.io/badge/Runtime-local-0EA5E9?style=flat-square" alt="Runtime local">
+        <img src="https://img.shields.io/badge/Runtime-local-0EA5E9?style=flat-square" alt="Runtime local">
     </a>
-    <a href="./LICENSE">
-      <img src="https://img.shields.io/badge/License-MIT-875569?style=flat-square" alt="MIT License">
-    </a>
-  </p>
-
-  <p>
     <a href="https://doc.qt.io/qtforpython-6/">
-      <img src="https://img.shields.io/badge/Desktop-PySide6-00A86B?style=flat-square" alt="Desktop PySide6">
+        <img src="https://img.shields.io/badge/Desktop-PySide6-00A86B?style=flat-square" alt="Desktop PySide6">
     </a>
     <a href="https://streamlit.io/">
-      <img src="https://img.shields.io/badge/Web-Streamlit-D94316?style=flat-square" alt="Web Streamlit">
+        <img src="https://img.shields.io/badge/Web-Streamlit-D94316?style=flat-square" alt="Web Streamlit">
     </a>
     <a href="https://fastapi.tiangolo.com/">
-      <img src="https://img.shields.io/badge/API-FastAPI-ffc315?style=flat-square" alt="API FastAPI">
+        <img src="https://img.shields.io/badge/API-FastAPI-ffc315?style=flat-square" alt="API FastAPI">
     </a>
     <a href="https://typer.tiangolo.com/">
-      <img src="https://img.shields.io/badge/CLI-Typer-7C3AED?style=flat-square" alt="CLI Typer">
+        <img src="https://img.shields.io/badge/CLI-Typer-7C3AED?style=flat-square" alt="CLI Typer">
     </a>
     <a href="https://www.uvicorn.org/">
-      <img src="https://img.shields.io/badge/Server-Uvicorn-EC3899?style=flat-square" alt="Server Uvicorn">
+        <img src="https://img.shields.io/badge/Server-Uvicorn-EC3899?style=flat-square" alt="Server Uvicorn">
     </a>
-  </p>
-  <img src="assets/images/logo.png" alt="iVoice logo" width="70%">
+</p>
+
+<div align="center">
+    <img src="assets/images/logo.png" alt="iVoice logo" width="70%">
 </div>
 
-## Overview
 
-`iVoice` is a local-first project for **instruction-driven speech systems**.
+## Overview
 
 The long-term goal is controllable speech synthesis from natural-language directions such as "say this like an old man who is short of breath and in a hurry". The current repository implements the production-ready **capture and speech-analysis layer** for that vision:
 
