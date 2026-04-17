@@ -4,7 +4,7 @@ IS_SOURCED=0
 (return 0 2>/dev/null) && IS_SOURCED=1
 
 if [ "$IS_SOURCED" -ne 1 ]; then
-    echo "[ERROR] Run this script via: source setup.sh [base|dev]"
+    echo "[ERROR] Run this script via: source setup.sh [base|desktop|web|api|dev]"
     exit 1
 fi
 
@@ -28,18 +28,28 @@ fi
 cd "${PROJECT_ROOT}" || return 1
 
 PROFILE="base"
+RUNTIME_EXTRAS="asr,translation,desktop,web,api"
 
 for arg in "$@"; do
     case "$arg" in
         base)
             PROFILE="base"
             ;;
+        desktop)
+            PROFILE="desktop"
+            ;;
+        web)
+            PROFILE="web"
+            ;;
+        api)
+            PROFILE="api"
+            ;;
         dev)
             PROFILE="dev"
             ;;
         *)
             echo "[ERROR] Unknown option: $arg" >&2
-            echo "[INFO] Usage: source setup.sh [base|dev]" >&2
+            echo "[INFO] Usage: source setup.sh [base|desktop|web|api|dev]" >&2
             return 1
             ;;
     esac
@@ -49,9 +59,23 @@ python3 -m venv .venv || return 1
 .venv/bin/python -m pip install --upgrade pip setuptools wheel || return 1
 
 EXTRAS=""
-if [ "$PROFILE" = "dev" ]; then
-    EXTRAS="dev"
-fi
+case "$PROFILE" in
+    base)
+        EXTRAS="${RUNTIME_EXTRAS}"
+        ;;
+    desktop)
+        EXTRAS="asr,translation,desktop"
+        ;;
+    web)
+        EXTRAS="asr,translation,web"
+        ;;
+    api)
+        EXTRAS="asr,translation,api"
+        ;;
+    dev)
+        EXTRAS="${RUNTIME_EXTRAS},dev"
+        ;;
+esac
 
 if [ -n "$EXTRAS" ]; then
     INSTALL_TARGET=".[${EXTRAS}]"
