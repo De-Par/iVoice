@@ -22,13 +22,15 @@ from app.desktop_ui.transcription_controller import DesktopTranscriptionControll
 from app.desktop_ui.view import build_desktop_view
 from schemas.runtime import PipelinePreparationResult
 from schemas.transcription import TranscriptionRun
-from services.bootstrap import AppContext
+from services.bootstrap import AppContext, build_app_context
 
 
 class VoiceDesktopWindow(QMainWindow):
-    def __init__(self, context: AppContext) -> None:
+    _NOTIFICATION_FRAMES = ("", ".", "..", "...")
+
+    def __init__(self) -> None:
         super().__init__()
-        self.context = context
+        self.context: AppContext | None = None
         self.current_audio_path: Path | None = None
         self.current_run_dir: Path | None = None
         self._record_finalize_path: Path | None = None
@@ -45,6 +47,15 @@ class VoiceDesktopWindow(QMainWindow):
         self._notification_timer = QTimer(self)
         self._notification_timer.setSingleShot(True)
         self._notification_timer.timeout.connect(self._hide_notification)
+        self._notification_animation_timer = QTimer(self)
+        self._notification_animation_timer.setInterval(260)
+        self._notification_animation_timer.timeout.connect(self._advance_notification_animation)
+        self._notification_base_text = ""
+        self._notification_animation_index = 0
+        self._startup_message = "Loading local models from cache and initializing runtime"
+        self._startup_thread: QThread | None = None
+        self._startup_worker: BackgroundTask | None = None
+        self._startup_ready = False
         self.capture_session: QMediaCaptureSession | None = None
         self.audio_input: QAudioInput | None = None
         self.recorder: QMediaRecorder | None = None
@@ -64,9 +75,16 @@ class VoiceDesktopWindow(QMainWindow):
         self.audio_controller.populate_input_device_list(bind_device=False)
         self._set_play_button_visible(False)
         self._set_transcribe_button_mode(False)
-        self._set_status("Ready")
-        self._set_controls_enabled(True)
+        self._set_status("Starting")
+        self._set_controls_enabled(False)
+        self._show_notification(
+            self._startup_message,
+            variant="download",
+            auto_hide_ms=0,
+            animate=True,
+        )
         self._refresh_details_panel()
+        self._start_startup_bootstrap()
 
     def _bind_ui(self, ui) -> None:
         self.ui = ui
@@ -116,8 +134,10 @@ class VoiceDesktopWindow(QMainWindow):
         self._set_transcribe_button_mode(self._worker_kind == "transcribe")
         transcribe_enabled = (enabled and has_audio) or self._worker_kind == "transcribe"
         self.transcribe_button.setEnabled(transcribe_enabled)
-        self.input_device_combo.setEnabled(enabled and self._audio_runtime_ready)
+        self.input_device_combo.setEnabled(enabled and bool(self.input_devices))
         self.language_input.setEnabled(enabled)
+        self.details_button.setEnabled(enabled)
+        self.notification_dismiss.setEnabled(enabled)
 
     def _set_play_button_visible(self, visible: bool) -> None:
         self.play_button.setVisible(visible)
@@ -163,9 +183,17 @@ class VoiceDesktopWindow(QMainWindow):
         *,
         variant: str = "cold",
         auto_hide_ms: int = 5000,
+        animate: bool = False,
     ) -> None:
         self._notification_timer.stop()
-        self.notification_text.setText(text)
+        self._notification_animation_timer.stop()
+        self._notification_base_text = text
+        self._notification_animation_index = 0
+        if animate:
+            self._advance_notification_animation()
+            self._notification_animation_timer.start()
+        else:
+            self.notification_text.setText(text)
         self.notification_bar.setProperty("variant", variant)
         self.notification_bar.style().unpolish(self.notification_bar)
         self.notification_bar.style().polish(self.notification_bar)
@@ -173,8 +201,17 @@ class VoiceDesktopWindow(QMainWindow):
         if auto_hide_ms > 0:
             self._notification_timer.start(auto_hide_ms)
 
+    @Slot()
+    def _advance_notification_animation(self) -> None:
+        frame = self._NOTIFICATION_FRAMES[self._notification_animation_index]
+        self.notification_text.setText(f"{self._notification_base_text}{frame}")
+        self._notification_animation_index = (
+            self._notification_animation_index + 1
+        ) % len(self._NOTIFICATION_FRAMES)
+
     def _hide_notification(self) -> None:
         self._notification_timer.stop()
+        self._notification_animation_timer.stop()
         self.notification_bar.hide()
 
     def _set_status(self, text: str) -> None:
@@ -189,8 +226,68 @@ class VoiceDesktopWindow(QMainWindow):
             current_audio_stats=self.current_audio_stats,
             last_prepare_result=self.last_prepare_result,
             last_run=self.last_run,
+            startup_message=None if self._startup_ready else self._startup_message,
         )
         self.details_box.setPlainText(details_text)
+
+    def _start_startup_bootstrap(self) -> None:
+        thread = QThread(self)
+        worker = BackgroundTask(self._bootstrap_context)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._handle_startup_success)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        worker.failed.connect(self._handle_startup_failure)
+        worker.failed.connect(thread.quit)
+        worker.failed.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._clear_startup_worker)
+
+        self._startup_thread = thread
+        self._startup_worker = worker
+        thread.start()
+
+    def _bootstrap_context(self) -> dict[str, object]:
+        context = build_app_context()
+        prepare_result = context.service.warm_up_pipeline()
+        return {
+            "context": context,
+            "prepare": prepare_result.model_dump(mode="json"),
+        }
+
+    @Slot(object)
+    def _handle_startup_success(self, result: object) -> None:
+        payload = dict(result)
+        self.context = payload["context"]
+        self.last_prepare_result = PipelinePreparationResult.model_validate(payload["prepare"])
+        self._startup_ready = True
+        self.audio_controller.populate_input_device_list(bind_device=False)
+        self._set_status("Ready")
+        self._set_controls_enabled(True)
+        self._show_notification(
+            "Local runtime initialized from cache.",
+            variant="download",
+            auto_hide_ms=2500,
+        )
+        self._refresh_details_panel()
+
+    @Slot(str)
+    def _handle_startup_failure(self, message: str) -> None:
+        self._startup_ready = False
+        self._set_status("Error")
+        self._show_notification(
+            "Startup failed. Check configuration or model cache.",
+            variant="download",
+            auto_hide_ms=0,
+        )
+        self._startup_message = message
+        self._refresh_details_panel()
+
+    @Slot()
+    def _clear_startup_worker(self) -> None:
+        self._startup_thread = None
+        self._startup_worker = None
 
     @Slot(bool)
     def _toggle_details(self, checked: bool) -> None:

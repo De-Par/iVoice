@@ -144,6 +144,13 @@ class DesktopAudioController:
 
     @Slot()
     def start_recording(self) -> None:
+        if self.window.context is None:
+            QMessageBox.information(
+                self.window,
+                "Initializing",
+                "The local runtime is still starting. Please wait a moment.",
+            )
+            return
         if not self.ensure_audio_runtime():
             return
         if self.window.player is None or self.window.recorder is None:

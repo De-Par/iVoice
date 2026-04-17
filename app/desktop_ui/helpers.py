@@ -10,44 +10,56 @@ from services.bootstrap import AppContext
 
 
 def build_details_text(
-    context: AppContext,
+    context: AppContext | None,
     input_devices: Sequence[Any],
     current_device_index: int,
     current_audio_stats: Mapping[str, str],
     last_prepare_result: PipelinePreparationResult | None,
     last_run: TranscriptionRun | None,
+    startup_message: str | None = None,
 ) -> str:
     sections: list[str] = []
 
-    asr = context.settings.asr
-    sections.append(
-        "\n".join(
-            [
-                "[Model]",
-                f"family: {context.service.asr_engine.family_name}",
-                f"provider: {context.service.asr_engine.provider_name}",
-                f"model: {context.service.asr_engine.model_name}",
-                f"device: {asr.device}",
-                f"compute_type: {asr.compute_type}",
-                f"offline_only: {asr.local_files_only}",
-                f"download_root: {asr.download_root}",
-            ]
+    if context is None:
+        sections.append(
+            "[Startup]\n"
+            + "\n".join(
+                [
+                    "status: initializing",
+                    f"message: {startup_message or 'building local runtime'}",
+                ]
+            )
         )
-    )
-    translation = context.settings.translation
-    sections.append(
-        "\n".join(
-            [
-                "[Translation]",
-                f"enabled: {translation.enabled}",
-                f"family: {context.service.translation_engine.family_name}",
-                f"provider: {context.service.translation_engine.provider_name}",
-                f"model: {context.service.translation_engine.model_name}",
-                f"target_language: {translation.target_language}",
-                f"download_root: {translation.download_root}",
-            ]
+    else:
+        asr = context.settings.asr
+        sections.append(
+            "\n".join(
+                [
+                    "[Model]",
+                    f"family: {context.service.asr_engine.family_name}",
+                    f"provider: {context.service.asr_engine.provider_name}",
+                    f"model: {context.service.asr_engine.model_name}",
+                    f"device: {asr.device}",
+                    f"compute_type: {asr.compute_type}",
+                    f"offline_only: {asr.local_files_only}",
+                    f"download_root: {asr.download_root}",
+                ]
+            )
         )
-    )
+        translation = context.settings.translation
+        sections.append(
+            "\n".join(
+                [
+                    "[Translation]",
+                    f"enabled: {translation.enabled}",
+                    f"family: {context.service.translation_engine.family_name}",
+                    f"provider: {context.service.translation_engine.provider_name}",
+                    f"model: {context.service.translation_engine.model_name}",
+                    f"target_language: {translation.target_language}",
+                    f"download_root: {translation.download_root}",
+                ]
+            )
+        )
 
     device_text = "<none>"
     if not input_devices:

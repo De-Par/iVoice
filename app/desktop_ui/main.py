@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from app.desktop_ui.qt import PYSIDE_IMPORT_ERROR, QApplication
 from app.desktop_ui.window import VoiceDesktopWindow
-from services.bootstrap import build_app_context
 
 
 def run() -> None:
@@ -13,8 +12,7 @@ def run() -> None:
         ) from PYSIDE_IMPORT_ERROR
 
     app = QApplication.instance() or QApplication([])
-    context = build_app_context()
-    window = VoiceDesktopWindow(context)
+    window = VoiceDesktopWindow()
     window.show()
     app.exec()
 

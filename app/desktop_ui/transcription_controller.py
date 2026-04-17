@@ -20,6 +20,13 @@ class DesktopTranscriptionController(QObject):
 
     @Slot()
     def transcribe_current_audio(self) -> None:
+        if self.window.context is None:
+            QMessageBox.information(
+                self.window,
+                "Initializing",
+                "The local runtime is still starting. Please wait a moment.",
+            )
+            return
         if self.window._worker_kind == "transcribe":
             self.request_stop_transcription()
             return
@@ -155,6 +162,8 @@ class DesktopTranscriptionController(QObject):
         audio_path: Path,
         language: str | None,
     ) -> dict[str, object]:
+        if self.window.context is None:
+            raise RuntimeError("Desktop runtime is not initialized yet.")
         try:
             if self.window.current_run_dir is not None and audio_path.is_relative_to(
                 self.window.current_run_dir
