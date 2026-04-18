@@ -272,7 +272,7 @@ class VoiceDesktopWindow(QMainWindow):
         thread.start()
 
     def _bootstrap_context(self) -> dict[str, object]:
-        context = build_app_context()
+        context = build_app_context(warm_up_on_startup=False)
         prepare_result = context.service.warm_up_pipeline()
         return {
             "context": context,

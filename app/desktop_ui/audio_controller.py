@@ -18,7 +18,7 @@ from app.desktop_ui.qt import (
     QUrl,
     Slot,
 )
-from core.audio import inspect_wav_bytes
+from core.audio import inspect_wav_file
 from core.formatting import format_bytes, format_dbfs
 
 if TYPE_CHECKING:
@@ -268,7 +268,7 @@ class DesktopAudioController:
             return
 
         try:
-            stats = inspect_wav_bytes(audio_path.read_bytes())
+            stats = inspect_wav_file(audio_path)
             if stats.duration_seconds <= 0 or stats.duration_seconds > 3600:
                 raise ValueError(f"Suspicious recording duration: {stats.duration_seconds:.2f}s")
         except Exception:
@@ -287,7 +287,7 @@ class DesktopAudioController:
 
     def update_audio_details(self, audio_path: Path) -> None:
         try:
-            stats = inspect_wav_bytes(audio_path.read_bytes())
+            stats = inspect_wav_file(audio_path)
         except Exception as error:  # pragma: no cover - UI boundary
             logger.exception("Failed to inspect local audio")
             self.window.current_audio_stats = {

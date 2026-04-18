@@ -13,8 +13,7 @@ from core.asr.base import BaseASREngine
 from core.audio import (
     copy_audio_file,
     ensure_wav_path,
-    get_audio_duration,
-    get_audio_sample_rate,
+    get_audio_overview,
     maybe_normalize_audio,
     save_uploaded_audio,
 )
@@ -224,8 +223,7 @@ class TranscriptionService:
         effective_language = normalize_language_code(language) or self.settings.asr.language
 
         try:
-            duration_seconds = get_audio_duration(target.audio_path)
-            sample_rate = get_audio_sample_rate(target.audio_path)
+            duration_seconds, sample_rate = get_audio_overview(target.audio_path)
             logger.info(
                 "Starting transcription run_id=%s family=%s provider=%s model=%s",
                 target.run_id,

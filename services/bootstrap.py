@@ -28,6 +28,7 @@ class AppContext:
 def build_app_context(
     config_path: str | Path | None = None,
     asr_local_files_only_override: bool | None = None,
+    warm_up_on_startup: bool | None = None,
 ) -> AppContext:
     settings = load_settings(config_path)
     if asr_local_files_only_override is not None:
@@ -47,11 +48,14 @@ def build_app_context(
         asr_request=build_asr_model_request(settings),
         translation_request=build_translation_model_request(settings),
     )
-    if any(
-        (
-            settings.asr.preload_on_startup,
-            settings.translation.preload_on_startup,
+    should_warm_up = warm_up_on_startup
+    if should_warm_up is None:
+        should_warm_up = any(
+            (
+                settings.asr.preload_on_startup,
+                settings.translation.preload_on_startup,
+            )
         )
-    ):
+    if should_warm_up:
         service.warm_up_pipeline()
     return AppContext(settings=settings, service=service)

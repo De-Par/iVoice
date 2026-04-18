@@ -21,6 +21,15 @@ class AudioPreviewStats:
     is_likely_silent: bool
 
 
+def get_audio_overview(audio_path: Path) -> tuple[float, int]:
+    with wave.open(str(audio_path), "rb") as wav_file:
+        frame_count = wav_file.getnframes()
+        sample_rate = wav_file.getframerate()
+        if sample_rate == 0:
+            raise ValueError(f"Invalid WAV sample rate in {audio_path}")
+        return frame_count / float(sample_rate), int(sample_rate)
+
+
 def save_uploaded_audio(upload: bytes | BinaryIO, output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -61,17 +70,13 @@ def ensure_wav_filename(filename: str) -> str:
 
 
 def get_audio_duration(audio_path: Path) -> float:
-    with wave.open(str(audio_path), "rb") as wav_file:
-        frame_count = wav_file.getnframes()
-        frame_rate = wav_file.getframerate()
-        if frame_rate == 0:
-            raise ValueError(f"Invalid WAV sample rate in {audio_path}")
-        return frame_count / float(frame_rate)
+    duration_seconds, _ = get_audio_overview(audio_path)
+    return duration_seconds
 
 
 def get_audio_sample_rate(audio_path: Path) -> int:
-    with wave.open(str(audio_path), "rb") as wav_file:
-        return int(wav_file.getframerate())
+    _, sample_rate = get_audio_overview(audio_path)
+    return sample_rate
 
 
 def inspect_wav_bytes(audio_bytes: bytes) -> AudioPreviewStats:
@@ -79,11 +84,19 @@ def inspect_wav_bytes(audio_bytes: bytes) -> AudioPreviewStats:
         raise ValueError("Audio payload is empty.")
 
     with wave.open(io.BytesIO(audio_bytes), "rb") as wav_file:
-        frame_count = wav_file.getnframes()
-        sample_rate = wav_file.getframerate()
-        channels = wav_file.getnchannels()
-        sample_width = wav_file.getsampwidth()
-        raw_frames = wav_file.readframes(frame_count)
+        return _inspect_wav_reader(wav_file)
+
+
+def inspect_wav_file(audio_path: Path) -> AudioPreviewStats:
+    with wave.open(str(audio_path), "rb") as wav_file:
+        return _inspect_wav_reader(wav_file)
+
+
+def _inspect_wav_reader(wav_file: wave.Wave_read) -> AudioPreviewStats:
+    frame_count = wav_file.getnframes()
+    sample_rate = wav_file.getframerate()
+    channels = wav_file.getnchannels()
+    sample_width = wav_file.getsampwidth()
 
     if sample_rate <= 0:
         raise ValueError("Invalid WAV sample rate.")
@@ -94,24 +107,29 @@ def inspect_wav_bytes(audio_bytes: bytes) -> AudioPreviewStats:
     peak_abs = 0
     sum_squares = 0.0
     sample_count = 0
+    max_value = 127 if sample_width == 1 else (1 << (8 * sample_width - 1)) - 1
+    chunk_frames = 16_384
 
-    for index in range(0, len(raw_frames), sample_width):
-        chunk = raw_frames[index : index + sample_width]
-        if len(chunk) < sample_width:
-            continue
+    while True:
+        raw_frames = wav_file.readframes(chunk_frames)
+        if not raw_frames:
+            break
 
-        if sample_width == 1:
-            sample = chunk[0] - 128
-            max_value = 127
-        else:
-            sample = int.from_bytes(chunk, byteorder="little", signed=True)
-            max_value = (1 << (8 * sample_width - 1)) - 1
+        for index in range(0, len(raw_frames), sample_width):
+            chunk = raw_frames[index : index + sample_width]
+            if len(chunk) < sample_width:
+                continue
 
-        abs_sample = abs(sample)
-        if abs_sample > peak_abs:
-            peak_abs = abs_sample
-        sum_squares += float(sample * sample)
-        sample_count += 1
+            if sample_width == 1:
+                sample = chunk[0] - 128
+            else:
+                sample = int.from_bytes(chunk, byteorder="little", signed=True)
+
+            abs_sample = abs(sample)
+            if abs_sample > peak_abs:
+                peak_abs = abs_sample
+            sum_squares += float(sample * sample)
+            sample_count += 1
 
     if sample_count == 0:
         peak_dbfs = None
