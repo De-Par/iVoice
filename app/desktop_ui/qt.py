@@ -2,6 +2,7 @@ from __future__ import annotations
 
 try:  # pragma: no cover - import guard for optional runtime dependency
     from PySide6.QtCore import QObject, Qt, QThread, QTimer, QUrl, Signal, Slot
+    from PySide6.QtGui import QIcon
     from PySide6.QtMultimedia import (
         QAudioInput,
         QAudioOutput,
@@ -59,6 +60,7 @@ except ImportError as error:  # pragma: no cover - handled at runtime
     QMediaPlayer = _QtPlaceholder  # type: ignore[assignment]
     QMediaRecorder = _QtPlaceholder  # type: ignore[assignment]
     QApplication = _QtPlaceholder  # type: ignore[assignment]
+    QIcon = _QtPlaceholder  # type: ignore[assignment]
     QComboBox = _QtPlaceholder  # type: ignore[assignment]
     QDockWidget = _QtPlaceholder  # type: ignore[assignment]
     QFileDialog = _QtPlaceholder  # type: ignore[assignment]
@@ -88,6 +90,7 @@ __all__ = [
     "QFrame",
     "QGridLayout",
     "QHBoxLayout",
+    "QIcon",
     "QLabel",
     "QLineEdit",
     "QMainWindow",
