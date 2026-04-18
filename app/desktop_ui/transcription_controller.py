@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from app.desktop_ui.qt import QMessageBox, QObject, QThread, Slot
+from app.desktop_ui.qt import QObject, QThread, Slot
 from app.desktop_ui.tasks import BackgroundTask
 from schemas.runtime import PipelinePreparationResult
 from schemas.transcription import TranscriptionRun
@@ -21,8 +21,7 @@ class DesktopTranscriptionController(QObject):
     @Slot()
     def transcribe_current_audio(self) -> None:
         if self.window.context is None:
-            QMessageBox.information(
-                self.window,
+            self.window.show_info_dialog(
                 "Initializing",
                 "The local runtime is still starting. Please wait a moment.",
             )
@@ -31,11 +30,10 @@ class DesktopTranscriptionController(QObject):
             self.request_stop_transcription()
             return
         if self.window.current_audio_path is None or not self.window.current_audio_path.exists():
-            QMessageBox.information(self.window, "No audio", "Record or open a WAV file first.")
+            self.window.show_info_dialog("No audio", "Record or open a WAV file first.")
             return
         if self.window._record_finalize_path is not None:
-            QMessageBox.information(
-                self.window,
+            self.window.show_info_dialog(
                 "Audio is not ready",
                 "The recording is still being finalized. Please wait a moment.",
             )
@@ -59,7 +57,7 @@ class DesktopTranscriptionController(QObject):
         kind: str | None = None,
     ) -> None:
         if self.window._worker_thread is not None:
-            QMessageBox.information(self.window, "Busy", "Another operation is already running.")
+            self.window.show_info_dialog("Busy", "Another operation is already running.")
             return
 
         self.window._worker_kind = kind
@@ -122,7 +120,7 @@ class DesktopTranscriptionController(QObject):
     @Slot(str)
     def show_error(self, message: str) -> None:
         self.window._show_notification("Task failed", tone="error", auto_hide_ms=0)
-        QMessageBox.critical(self.window, "Operation failed", message)
+        self.window.show_error_dialog("Operation failed", message)
 
     @Slot()
     def clear_worker(self) -> None:

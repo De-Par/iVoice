@@ -32,9 +32,13 @@ class DesktopPalette:
 
     primary: str = "#22c55e"
     primary_hover: str = "#16a34a"
+    primary_soft_border: str = "#4ade80"
 
     danger: str = "#fc5230"
     danger_hover: str = "#ec4828"
+    warning_action: str = "#f59e0b"
+    warning_action_hover: str = "#ea8a00"
+    warning_action_border: str = "#f7b23b"
 
     notification_warning_bg: str = "#efc20f"
     notification_warning_border: str = "#f6d252"
@@ -108,6 +112,9 @@ class DesktopMetrics:
     title_size: int = 28
     subtitle_size: int = 14
     details_padding: int = 14
+    dialog_radius: int = 18
+    dialog_padding: int = 14
+    dialog_button_min_width: int = 100
 
 
 PALETTE = DesktopPalette()
@@ -348,5 +355,58 @@ def build_desktop_stylesheet() -> str:
             border-radius: {m.button_radius}px;
             padding: {m.details_padding}px;
             color: {p.text_soft};
+        }}
+    """
+
+
+def build_message_box_stylesheet() -> str:
+    p = PALETTE
+    m = METRICS
+    return f"""
+        QMessageBox {{
+            background: {p.surface};
+        }}
+        QMessageBox QWidget {{
+            background: {p.surface};
+            color: {p.text};
+        }}
+        QMessageBox QLabel {{
+            background: transparent;
+            color: {p.text};
+            font-size: 14px;
+        }}
+        QMessageBox QPushButton {{
+            background: {p.button_bg};
+            color: {p.text};
+            border: 1px solid {p.button_border};
+            border-radius: {m.button_radius}px;
+            padding: {m.button_padding_vertical}px {m.button_padding_horizontal}px;
+            min-width: {m.dialog_button_min_width}px;
+            font-weight: 600;
+        }}
+        QMessageBox QPushButton:hover {{
+            background: {p.button_hover};
+            border: 1px solid {p.button_hover_border};
+        }}
+        QMessageBox QPushButton:focus {{
+            border: 1px solid {p.selection};
+        }}
+        QMessageBox QPushButton[dialogRole="affirmative"] {{
+            background: {p.primary};
+            color: white;
+            border: 1px solid {p.primary_soft_border};
+        }}
+        QMessageBox QPushButton[dialogRole="affirmative"]:hover {{
+            background: {p.primary_hover};
+            border: 1px solid {p.primary_hover};
+        }}
+        QMessageBox QPushButton[dialogRole="dismiss"] {{
+            background: {p.warning_action};
+            color: white;
+            border: 1px solid {p.warning_action_border};
+        }}
+        QMessageBox QPushButton[dialogRole="dismiss"]:hover {{
+            background: {p.warning_action_hover};
+            border: 1px solid {p.warning_action_hover};
         }}
     """

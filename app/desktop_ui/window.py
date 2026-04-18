@@ -12,13 +12,18 @@ from app.desktop_ui.qt import (
     QMediaCaptureSession,
     QMediaPlayer,
     QMediaRecorder,
+    QMessageBox,
     Qt,
     QThread,
     QTimer,
     Slot,
 )
 from app.desktop_ui.tasks import BackgroundTask
-from app.desktop_ui.theme import METRICS, build_desktop_stylesheet
+from app.desktop_ui.theme import (
+    METRICS,
+    build_desktop_stylesheet,
+    build_message_box_stylesheet,
+)
 from app.desktop_ui.transcription_controller import DesktopTranscriptionController
 from app.desktop_ui.view import build_desktop_view
 from schemas.runtime import PipelinePreparationResult
@@ -192,6 +197,76 @@ class VoiceDesktopWindow(QMainWindow):
         ):
             widget.setAttribute(always_show, True)
 
+    def _build_message_box(
+        self,
+        *,
+        icon,
+        title: str,
+        text: str,
+        buttons,
+        default_button=None,
+    ) -> QMessageBox:
+        dialog = QMessageBox(self)
+        dialog.setIcon(icon)
+        dialog.setWindowTitle(title)
+        dialog.setText(text)
+        dialog.setStandardButtons(buttons)
+        if default_button is not None:
+            dialog.setDefaultButton(default_button)
+        dialog.setStyleSheet(build_message_box_stylesheet())
+        for button in dialog.buttons():
+            standard_button = dialog.standardButton(button)
+            if standard_button in {
+                QMessageBox.StandardButton.Yes,
+                QMessageBox.StandardButton.Ok,
+            }:
+                button.setProperty("dialogRole", "affirmative")
+            elif standard_button in {
+                QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Cancel,
+            }:
+                button.setProperty("dialogRole", "dismiss")
+            button.style().unpolish(button)
+            button.style().polish(button)
+        return dialog
+
+    def show_info_dialog(self, title: str, text: str) -> QMessageBox.StandardButton:
+        dialog = self._build_message_box(
+            icon=QMessageBox.Icon.Information,
+            title=title,
+            text=text,
+            buttons=QMessageBox.StandardButton.Ok,
+            default_button=QMessageBox.StandardButton.Ok,
+        )
+        return QMessageBox.StandardButton(dialog.exec())
+
+    def show_warning_dialog(
+        self,
+        title: str,
+        text: str,
+        *,
+        buttons=QMessageBox.StandardButton.Ok,
+        default_button=QMessageBox.StandardButton.Ok,
+    ) -> QMessageBox.StandardButton:
+        dialog = self._build_message_box(
+            icon=QMessageBox.Icon.Warning,
+            title=title,
+            text=text,
+            buttons=buttons,
+            default_button=default_button,
+        )
+        return QMessageBox.StandardButton(dialog.exec())
+
+    def show_error_dialog(self, title: str, text: str) -> QMessageBox.StandardButton:
+        dialog = self._build_message_box(
+            icon=QMessageBox.Icon.Critical,
+            title=title,
+            text=text,
+            buttons=QMessageBox.StandardButton.Ok,
+            default_button=QMessageBox.StandardButton.Ok,
+        )
+        return QMessageBox.StandardButton(dialog.exec())
+
     def _show_notification(
         self,
         text: str,
@@ -315,3 +390,24 @@ class VoiceDesktopWindow(QMainWindow):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._layout_notification_bar()
+
+    def closeEvent(self, event) -> None:
+        if self._worker_thread is not None:
+            message = "A background task is still running. Close iVoice anyway?"
+        elif self.recorder is not None and (
+            self.recorder.recorderState() == QMediaRecorder.RecorderState.RecordingState
+        ):
+            message = "Recording is still in progress. Close iVoice anyway?"
+        else:
+            message = "Close iVoice?"
+
+        answer = self.show_warning_dialog(
+            "Confirm Exit",
+            message,
+            buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            default_button=QMessageBox.StandardButton.No,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            event.accept()
+            return
+        event.ignore()

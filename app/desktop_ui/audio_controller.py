@@ -13,7 +13,6 @@ from app.desktop_ui.qt import (
     QMediaFormat,
     QMediaPlayer,
     QMediaRecorder,
-    QMessageBox,
     QTimer,
     QUrl,
     Slot,
@@ -73,8 +72,7 @@ class DesktopAudioController:
             self.window.audio_output.setVolume(1.0)
         except Exception as error:  # pragma: no cover - native multimedia boundary
             logger.exception("Failed to initialize desktop audio runtime")
-            QMessageBox.critical(
-                self.window,
+            self.window.show_error_dialog(
                 "Audio initialization failed",
                 f"Desktop audio runtime could not be initialized: {error}",
             )
@@ -130,7 +128,7 @@ class DesktopAudioController:
     @Slot()
     def handle_player_error(self) -> None:
         if self.window.player.errorString():
-            QMessageBox.warning(self.window, "Playback failed", self.window.player.errorString())
+            self.window.show_warning_dialog("Playback failed", self.window.player.errorString())
 
     @Slot(object)
     def handle_playback_state_changed(self, state: object) -> None:
@@ -151,8 +149,7 @@ class DesktopAudioController:
     @Slot()
     def start_recording(self) -> None:
         if self.window.context is None:
-            QMessageBox.information(
-                self.window,
+            self.window.show_info_dialog(
                 "Initializing",
                 "The local runtime is still starting. Please wait a moment.",
             )
@@ -217,8 +214,7 @@ class DesktopAudioController:
         if self.window.player is None:
             return
         if self.window.current_audio_path is None or not self.window.current_audio_path.exists():
-            QMessageBox.information(
-                self.window,
+            self.window.show_info_dialog(
                 "No audio",
                 "No local WAV recording is available yet.",
             )
