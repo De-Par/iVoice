@@ -63,9 +63,9 @@ def main() -> None:
             st.error(f"Transcription failed: {error}")
             return
 
-        st.success("Transcription completed.")
-        st.text_area("Transcript", value=result.metadata.transcript, height=200)
-        st.text_area("Transcript EN", value=result.metadata.transcript_en, height=200)
+        st.success("Command normalization completed.")
+        st.text_area("Source cmd", value=result.metadata.source_text, height=180)
+        st.text_area("Normalized cmd", value=result.metadata.command_en, height=180)
         with st.expander("Metadata"):
             st.json(result.metadata.model_dump(mode="json"))
 
