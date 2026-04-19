@@ -76,7 +76,7 @@ class TranslationRouteSettings(TranslationSettings):
 class PCSSettings(ModelComponentSettings):
     enabled: bool = True
     family: str = "punctuation"
-    provider: str = "transformers"
+    provider: str = "onnx"
     model_name: str = "1-800-BAD-CODE/xlm-roberta_punctuation_fullstop_truecase"
     device: str = "auto"
     cpu_threads: int = Field(default=0, ge=0)
