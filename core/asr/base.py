@@ -13,7 +13,7 @@ class BaseASREngine(ABC):
     model_name: str
 
     def prepare(self) -> ModelPreparationResult:
-        """Ensure speech-analysis model assets are available locally for later transcription."""
+        """Ensure speech-analysis model assets are available locally for later transcription"""
         raise NotImplementedError
 
     @abstractmethod

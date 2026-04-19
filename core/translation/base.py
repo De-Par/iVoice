@@ -12,7 +12,7 @@ class BaseTranslationEngine(ABC):
     model_name: str
 
     def prepare(self) -> ModelPreparationResult:
-        """Ensure translation assets are available locally for offline runtime."""
+        """Ensure translation assets are available locally for offline runtime"""
         raise NotImplementedError
 
     def normalize_language_code(self, value: str | None) -> str | None:
@@ -26,4 +26,4 @@ class BaseTranslationEngine(ABC):
         source_language: str | None = None,
         target_language: str = "en",
     ) -> TranslationResult:
-        """Translate a transcript into the target language."""
+        """Translate source text into the target language"""
