@@ -28,7 +28,7 @@ fi
 cd "${PROJECT_ROOT}" || return 1
 
 PROFILE="base"
-RUNTIME_EXTRAS="asr,translation,desktop,web,api"
+RUNTIME_EXTRAS="asr,translation,pcs,desktop,web,api"
 
 for arg in "$@"; do
     case "$arg" in
@@ -64,13 +64,13 @@ case "$PROFILE" in
         EXTRAS="${RUNTIME_EXTRAS}"
         ;;
     desktop)
-        EXTRAS="asr,translation,desktop"
+        EXTRAS="asr,translation,pcs,desktop"
         ;;
     web)
-        EXTRAS="asr,translation,web"
+        EXTRAS="asr,translation,pcs,web"
         ;;
     api)
-        EXTRAS="asr,translation,api"
+        EXTRAS="asr,translation,pcs,api"
         ;;
     dev)
         EXTRAS="${RUNTIME_EXTRAS},dev"
