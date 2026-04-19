@@ -27,8 +27,8 @@ from app.desktop_ui.theme import (
 )
 from app.desktop_ui.transcription_controller import DesktopTranscriptionController
 from app.desktop_ui.view import build_desktop_view
+from schemas.command_run import CommandRun
 from schemas.runtime import PipelinePreparationResult
-from schemas.transcription import TranscriptionRun
 from services.bootstrap import AppContext, build_app_context
 
 
@@ -44,7 +44,7 @@ class VoiceDesktopWindow(QMainWindow):
         self._record_finalize_size: int | None = None
         self._record_finalize_attempts = 0
         self.current_audio_stats: dict[str, str] = {}
-        self.last_run: TranscriptionRun | None = None
+        self.last_run: CommandRun | None = None
         self.last_prepare_result: PipelinePreparationResult | None = None
         self._worker_thread: QThread | None = None
         self._worker: BackgroundTask | None = None
@@ -63,6 +63,8 @@ class VoiceDesktopWindow(QMainWindow):
         self._startup_thread: QThread | None = None
         self._startup_worker: BackgroundTask | None = None
         self._startup_ready = False
+        self._controls_enabled = False
+        self._is_editing_transcript = False
         self.capture_session: QMediaCaptureSession | None = None
         self.audio_input: QAudioInput | None = None
         self.recorder: QMediaRecorder | None = None
@@ -95,6 +97,7 @@ class VoiceDesktopWindow(QMainWindow):
         self.notification_text = ui.notification_text
         self.notification_dismiss = ui.notification_dismiss
         self.details_button = ui.details_button
+        self.source_mode_combo = ui.source_mode_combo
         self.language_input = ui.language_input
         self.input_device_combo = ui.input_device_combo
         self.record_button = ui.record_button
@@ -103,44 +106,68 @@ class VoiceDesktopWindow(QMainWindow):
         self.transcribe_button = ui.transcribe_button
         self.audio_summary = ui.audio_summary
         self.transcript_box = ui.transcript_box
-        self.copy_button = ui.copy_button
+        self.command_box = ui.command_box
+        self.source_copy_button = ui.source_copy_button
+        self.command_copy_button = ui.command_copy_button
+        self.command_toggle_button = ui.command_toggle_button
+        self.edit_button = ui.edit_button
         self.details_dock = ui.details_dock
         self.details_box = ui.details_box
 
         self.play_button.setEnabled(False)
         self.transcribe_button.setEnabled(False)
+        self.edit_button.setEnabled(False)
+        self.command_toggle_button.setEnabled(False)
+        self._set_command_panel_expanded(False)
 
         self.record_button.clicked.connect(self.audio_controller.toggle_recording)
         self.play_button.clicked.connect(self.audio_controller.play_audio)
         self.open_button.clicked.connect(self.audio_controller.open_wav)
-        self.transcribe_button.clicked.connect(
-            self.transcription_controller.transcribe_current_audio
-        )
+        self.transcribe_button.clicked.connect(self.transcription_controller.run_primary_action)
+        self.source_mode_combo.currentIndexChanged.connect(self._handle_source_mode_changed)
         self.input_device_combo.currentIndexChanged.connect(self.audio_controller.set_input_device)
         self.details_button.toggled.connect(self._toggle_details)
-        self.copy_button.clicked.connect(self._copy_transcript)
+        self.source_copy_button.clicked.connect(self._copy_source_command)
+        self.command_copy_button.clicked.connect(self._copy_normalized_command)
+        self.command_toggle_button.toggled.connect(self._toggle_command_panel)
+        self.edit_button.clicked.connect(self.transcription_controller.toggle_transcript_edit)
+        self.transcript_box.textChanged.connect(self._refresh_transcript_action_buttons)
+        self.command_box.textChanged.connect(self._refresh_transcript_action_buttons)
         self.notification_dismiss.clicked.connect(self._hide_notification)
         self.details_dock.visibilityChanged.connect(self._sync_details_toggle)
         self._enable_button_tooltips()
 
     def _set_controls_enabled(self, enabled: bool) -> None:
+        self._controls_enabled = enabled
+        text_mode = self._is_text_mode()
         recorder_state = None
         if self.recorder is not None:
             recorder_state = self.recorder.recorderState()
         is_recording = recorder_state == QMediaRecorder.RecorderState.RecordingState
-        self.record_button.setEnabled(enabled)
+        self.record_button.setEnabled(enabled and not text_mode)
         self._set_record_button_mode(is_recording)
-        self.open_button.setEnabled(enabled and not is_recording)
-        has_audio = self.current_audio_path is not None and self._record_finalize_path is None
-        self._set_play_button_visible(has_audio)
+        self.open_button.setEnabled(enabled and not text_mode and not is_recording)
+        has_audio = (
+            not text_mode
+            and self.current_audio_path is not None
+            and self._record_finalize_path is None
+        )
+        self._set_play_button_visible(has_audio and not text_mode)
         self.play_button.setEnabled(enabled and has_audio and self.player is not None)
         self._set_transcribe_button_mode(self._worker_kind == "transcribe")
-        transcribe_enabled = (enabled and has_audio) or self._worker_kind == "transcribe"
+        text_ready = bool(self.transcript_box.toPlainText().strip())
+        transcribe_enabled = (
+            (enabled and text_ready) if text_mode else (enabled and has_audio)
+        ) or self._worker_kind == "transcribe"
         self.transcribe_button.setEnabled(transcribe_enabled)
-        self.input_device_combo.setEnabled(enabled and bool(self.input_devices))
+        self.source_mode_combo.setEnabled(enabled)
+        self.input_device_combo.setEnabled(enabled and not text_mode and bool(self.input_devices))
         self.language_input.setEnabled(enabled)
         self.details_button.setEnabled(enabled)
-        self.copy_button.setEnabled(enabled and bool(self.transcript_box.toPlainText().strip()))
+        self.transcript_box.setReadOnly(
+            not (self._controls_enabled and (self._is_text_mode() or self._is_editing_transcript))
+        )
+        self._refresh_transcript_action_buttons()
 
     def _set_play_button_visible(self, visible: bool) -> None:
         self.play_button.setVisible(visible)
@@ -165,7 +192,7 @@ class VoiceDesktopWindow(QMainWindow):
         self.record_button.style().unpolish(self.record_button)
         self.record_button.style().polish(self.record_button)
 
-    def _copy_transcript(self) -> None:
+    def _copy_source_command(self) -> None:
         text = self.transcript_box.toPlainText().strip()
         if not text:
             return
@@ -173,15 +200,45 @@ class VoiceDesktopWindow(QMainWindow):
         clipboard.setText(text)
         self._show_notification("Copied", tone="success", auto_hide_ms=1200)
 
+    def _copy_normalized_command(self) -> None:
+        text = self.command_box.toPlainText().strip()
+        if not text:
+            return
+        clipboard = QApplication.clipboard()
+        clipboard.setText(text)
+        self._show_notification("Copied", tone="success", auto_hide_ms=1200)
+
+    def _set_transcript_edit_mode(self, editing: bool) -> None:
+        self._is_editing_transcript = editing
+        self.edit_button.setProperty("saving", editing)
+        self.edit_button.setText("Save" if editing else "Edit")
+        self.edit_button.setToolTip(
+            "Save source command changes and refresh normalization"
+            if editing
+            else "Edit source command and update artifacts"
+        )
+        self.edit_button.style().unpolish(self.edit_button)
+        self.edit_button.style().polish(self.edit_button)
+        self.transcript_box.setReadOnly(
+            not (self._controls_enabled and (editing or self._is_text_mode()))
+        )
+        if editing:
+            self.transcript_box.setFocus()
+        self._refresh_transcript_action_buttons()
+
     def _set_transcribe_button_mode(self, is_running: bool) -> None:
         if is_running:
             self.transcribe_button.setText("Stop")
             self.transcribe_button.setObjectName("dangerButton")
-            self.transcribe_button.setToolTip("Stop the current transcription task")
+            self.transcribe_button.setToolTip("Stop the current normalization task")
         else:
-            self.transcribe_button.setText("Transcribe")
+            if self._is_text_mode():
+                self.transcribe_button.setText("Normalize")
+                self.transcribe_button.setToolTip("Normalize the current text command into English")
+            else:
+                self.transcribe_button.setText("Transcribe")
+                self.transcribe_button.setToolTip("Run local transcription for the current audio")
             self.transcribe_button.setObjectName("primaryButton")
-            self.transcribe_button.setToolTip("Run local transcription for the current audio")
         self.transcribe_button.style().unpolish(self.transcribe_button)
         self.transcribe_button.style().polish(self.transcribe_button)
 
@@ -190,13 +247,85 @@ class VoiceDesktopWindow(QMainWindow):
         for widget in (
             self.notification_dismiss,
             self.details_button,
+            self.source_mode_combo,
             self.record_button,
             self.play_button,
             self.open_button,
             self.transcribe_button,
-            self.copy_button,
+            self.source_copy_button,
+            self.command_copy_button,
+            self.command_toggle_button,
+            self.edit_button,
         ):
             widget.setAttribute(always_show, True)
+
+    def _refresh_transcript_action_buttons(self) -> None:
+        transcript_present = bool(self.transcript_box.toPlainText().strip())
+        command_present = bool(self.command_box.toPlainText().strip())
+        has_editable_run = (
+            self.last_run is not None and self.last_run.metadata.source_modality == "audio"
+        )
+        has_audio = (
+            not self._is_text_mode()
+            and self.current_audio_path is not None
+            and self._record_finalize_path is None
+        )
+        transcribe_enabled = (
+            (self._controls_enabled and transcript_present)
+            if self._is_text_mode()
+            else (self._controls_enabled and has_audio)
+        ) or self._worker_kind == "transcribe"
+        self.transcribe_button.setEnabled(transcribe_enabled)
+        self.source_copy_button.setEnabled(
+            self._controls_enabled and transcript_present and not self._is_editing_transcript
+        )
+        self.command_copy_button.setEnabled(
+            self._controls_enabled and command_present and not self._is_editing_transcript
+        )
+        self.command_toggle_button.setEnabled(self._controls_enabled and command_present)
+        self.edit_button.setEnabled(
+            self._controls_enabled
+            and not self._is_text_mode()
+            and transcript_present
+            and has_editable_run
+        )
+        self.transcript_box.setReadOnly(
+            not (self._controls_enabled and (self._is_text_mode() or self._is_editing_transcript))
+        )
+        if not command_present:
+            self._set_command_panel_expanded(False)
+
+    def _is_text_mode(self) -> bool:
+        return self.source_mode_combo.currentText() == "Text"
+
+    @Slot()
+    def _handle_source_mode_changed(self) -> None:
+        if self._is_text_mode():
+            self._set_transcript_edit_mode(False)
+            self.current_audio_stats = {}
+            self.audio_summary.setText("Direct text input mode.")
+            self._set_play_button_visible(False)
+        elif self.current_audio_path is None:
+            self.audio_summary.setText("No audio selected.")
+        self._set_transcribe_button_mode(self._worker_kind == "transcribe")
+        self._set_controls_enabled(self._controls_enabled)
+        self._refresh_details_panel()
+
+    @Slot(bool)
+    def _toggle_command_panel(self, expanded: bool) -> None:
+        self._set_command_panel_expanded(expanded)
+
+    def _set_command_panel_expanded(self, expanded: bool) -> None:
+        self.command_box.setVisible(expanded)
+        self.command_toggle_button.blockSignals(True)
+        self.command_toggle_button.setChecked(expanded)
+        self.command_toggle_button.setText("▴" if expanded else "▾")
+        self.command_toggle_button.setToolTip(
+            "Hide normalized English command" if expanded else "Show normalized English command"
+        )
+        self.command_toggle_button.blockSignals(False)
+        self.command_toggle_button.style().unpolish(self.command_toggle_button)
+        self.command_toggle_button.style().polish(self.command_toggle_button)
 
     def _build_message_box(
         self,

@@ -27,6 +27,7 @@ class DesktopWidgets:
     notification_text: QLabel
     notification_dismiss: QPushButton
     details_button: QPushButton
+    source_mode_combo: QComboBox
     language_input: QLineEdit
     input_device_combo: QComboBox
     record_button: QPushButton
@@ -35,7 +36,11 @@ class DesktopWidgets:
     transcribe_button: QPushButton
     audio_summary: QLabel
     transcript_box: QPlainTextEdit
-    copy_button: QPushButton
+    command_box: QPlainTextEdit
+    source_copy_button: QPushButton
+    command_copy_button: QPushButton
+    command_toggle_button: QPushButton
+    edit_button: QPushButton
     details_dock: QDockWidget
     details_box: QPlainTextEdit
 
@@ -122,6 +127,9 @@ def build_desktop_view(window) -> DesktopWidgets:
 
     language_input = QLineEdit()
     language_input.setPlaceholderText("Language hint (optional)")
+    source_mode_combo = QComboBox()
+    source_mode_combo.addItems(["Audio", "Text"])
+    source_mode_combo.setToolTip("Choose whether the command comes from audio or direct text")
     input_device_combo = QComboBox()
     record_button = QPushButton("Record")
     record_button.setObjectName("recordButton")
@@ -137,10 +145,12 @@ def build_desktop_view(window) -> DesktopWidgets:
     transcribe_button.setObjectName("primaryButton")
     transcribe_button.setToolTip("Run local transcription for the current audio")
 
-    grid.addWidget(QLabel("Input device"), 0, 0)
-    grid.addWidget(input_device_combo, 0, 1)
-    grid.addWidget(QLabel("Language"), 1, 0)
-    grid.addWidget(language_input, 1, 1)
+    grid.addWidget(QLabel("Mode"), 0, 0)
+    grid.addWidget(source_mode_combo, 0, 1)
+    grid.addWidget(QLabel("Input device"), 1, 0)
+    grid.addWidget(input_device_combo, 1, 1)
+    grid.addWidget(QLabel("Language"), 2, 0)
+    grid.addWidget(language_input, 2, 1)
 
     button_row = QHBoxLayout()
     button_row.setSpacing(m.button_row_spacing)
@@ -157,13 +167,22 @@ def build_desktop_view(window) -> DesktopWidgets:
     summary_row.addStretch(1)
 
     transcript_box = QPlainTextEdit()
-    transcript_box.setPlaceholderText("Transcript will appear here.")
+    transcript_box.setPlaceholderText("Type the original command here or generate it from audio.")
     transcript_box.setReadOnly(True)
     transcript_box.setMinimumHeight(0)
     transcript_box.setSizePolicy(
         QSizePolicy.Policy.Expanding,
         QSizePolicy.Policy.Expanding,
     )
+    command_box = QPlainTextEdit()
+    command_box.setPlaceholderText("Expanded view of the English-normalized command.")
+    command_box.setReadOnly(True)
+    command_box.setMinimumHeight(0)
+    command_box.setSizePolicy(
+        QSizePolicy.Policy.Expanding,
+        QSizePolicy.Policy.Expanding,
+    )
+    command_box.hide()
 
     transcript_card = QFrame()
     transcript_card.setObjectName("transcriptCard")
@@ -182,17 +201,43 @@ def build_desktop_view(window) -> DesktopWidgets:
     transcript_header = QHBoxLayout()
     transcript_header.setSpacing(m.transcript_header_spacing)
 
-    transcript_title = QLabel("Transcript")
+    transcript_title = QLabel("Source cmd")
     transcript_title.setObjectName("sectionTitleLabel")
-    copy_button = QPushButton("⎘")
-    copy_button.setObjectName("copyButton")
-    copy_button.setToolTip("Copy transcript to clipboard")
-    copy_button.setEnabled(False)
+    source_copy_button = QPushButton("⎘")
+    source_copy_button.setObjectName("copyButton")
+    source_copy_button.setToolTip("Copy source command")
+    source_copy_button.setEnabled(False)
+    edit_button = QPushButton("Edit")
+    edit_button.setObjectName("editButton")
+    edit_button.setToolTip("Edit source command and update artifacts")
+    edit_button.setEnabled(False)
     transcript_header.addWidget(transcript_title)
-    transcript_header.addWidget(copy_button)
+    transcript_header.addWidget(source_copy_button)
     transcript_header.addStretch(1)
+    transcript_header.addWidget(edit_button)
     transcript_layout.addLayout(transcript_header)
     transcript_layout.addWidget(transcript_box)
+
+    command_header = QHBoxLayout()
+    command_header.setSpacing(m.transcript_header_spacing)
+    command_title = QLabel("Normalized cmd")
+    command_title.setObjectName("sectionTitleLabel")
+    command_copy_button = QPushButton("⎘")
+    command_copy_button.setObjectName("copyButton")
+    command_copy_button.setToolTip("Copy normalized English command")
+    command_copy_button.setEnabled(False)
+    command_toggle_button = QPushButton("▾")
+    command_toggle_button.setObjectName("toggleButton")
+    command_toggle_button.setCheckable(True)
+    command_toggle_button.setChecked(False)
+    command_toggle_button.setToolTip("Show normalized English command")
+    command_toggle_button.setEnabled(False)
+    command_header.addWidget(command_toggle_button)
+    command_header.addWidget(command_title)
+    command_header.addWidget(command_copy_button)
+    command_header.addStretch(1)
+    transcript_layout.addLayout(command_header)
+    transcript_layout.addWidget(command_box)
 
     controls_layout.addLayout(grid)
     controls_layout.addLayout(button_row)
@@ -211,6 +256,7 @@ def build_desktop_view(window) -> DesktopWidgets:
         notification_text=notification_text,
         notification_dismiss=notification_dismiss,
         details_button=details_button,
+        source_mode_combo=source_mode_combo,
         language_input=language_input,
         input_device_combo=input_device_combo,
         record_button=record_button,
@@ -219,7 +265,11 @@ def build_desktop_view(window) -> DesktopWidgets:
         transcribe_button=transcribe_button,
         audio_summary=audio_summary,
         transcript_box=transcript_box,
-        copy_button=copy_button,
+        command_box=command_box,
+        source_copy_button=source_copy_button,
+        command_copy_button=command_copy_button,
+        command_toggle_button=command_toggle_button,
+        edit_button=edit_button,
         details_dock=details_dock,
         details_box=details_box,
     )

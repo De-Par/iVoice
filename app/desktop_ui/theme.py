@@ -107,17 +107,21 @@ class DesktopMetrics:
     play_button_radius: int = 9
     play_button_size: int = 24
 
+    toggle_button_size: int = 18
+
     details_min_width: int = 320
+    details_padding: int = 14
+
     section_title_size: int = 16
     title_size: int = 28
     subtitle_size: int = 14
-    details_padding: int = 14
+
     dialog_radius: int = 18
     dialog_padding: int = 14
-    dialog_button_radius: int = 16
-    dialog_button_min_width: int = 84
-    dialog_button_min_height: int = 44
-    dialog_button_padding_horizontal: int = 18
+    dialog_button_radius: int = 18
+    dialog_button_min_width: int = 72
+    dialog_button_min_height: int = 38
+    dialog_button_padding_horizontal: int = 16
 
 
 PALETTE = DesktopPalette()
@@ -349,6 +353,59 @@ def build_desktop_stylesheet() -> str:
             color: {p.button_disabled_text};
             border: 1px solid {p.button_disabled_border};
         }}
+        QPushButton#toggleButton {{
+            background: transparent;
+            color: {p.text_muted};
+            border: none;
+            padding: 0;
+            min-width: {m.toggle_button_size}px;
+            max-width: {m.toggle_button_size}px;
+            min-height: {m.toggle_button_size}px;
+            max-height: {m.toggle_button_size}px;
+            font-size: 14px;
+            font-weight: 700;
+        }}
+        QPushButton#toggleButton:hover {{
+            background: transparent;
+            color: {p.text};
+            border: none;
+        }}
+        QPushButton#toggleButton:disabled {{
+            background: transparent;
+            color: {p.button_disabled_text};
+            border: none;
+        }}
+        QPushButton#editButton {{
+            background: {p.button_bg};
+            color: {p.text};
+            border: 1px solid {p.button_border};
+            border-radius: {m.play_button_radius}px;
+            padding: 0 12px;
+            min-height: {m.play_button_size}px;
+            max-height: {m.play_button_size}px;
+            font-size: 12px;
+            font-weight: 700;
+        }}
+        QPushButton#editButton:hover {{
+            background: {p.button_hover};
+            color: {p.text};
+            border: 1px solid {p.button_hover_border};
+        }}
+        QPushButton#editButton[saving="true"] {{
+            background: {p.primary};
+            color: white;
+            border: 1px solid {p.primary_soft_border};
+        }}
+        QPushButton#editButton[saving="true"]:hover {{
+            background: {p.primary_hover};
+            color: white;
+            border: 1px solid {p.primary_hover};
+        }}
+        QPushButton#editButton:disabled {{
+            background: {p.button_disabled_bg};
+            color: {p.button_disabled_text};
+            border: 1px solid {p.button_disabled_border};
+        }}
         QDockWidget {{
             border: none;
         }}
@@ -387,8 +444,8 @@ def build_message_box_stylesheet() -> str:
             min-width: {m.dialog_button_min_width}px;
             min-height: {m.dialog_button_min_height}px;
             max-height: {m.dialog_button_min_height}px;
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 12px;
+            font-weight: 700;
             text-align: center;
         }}
         QMessageBox QPushButton:hover {{

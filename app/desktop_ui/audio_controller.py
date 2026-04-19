@@ -116,11 +116,18 @@ class DesktopAudioController:
         self.window.transcribe_button.setEnabled(
             has_audio and not is_recording and not is_finalizing
         )
-        self.window.copy_button.setEnabled(
+        self.window.source_copy_button.setEnabled(
             has_audio
             and not is_recording
             and not is_finalizing
             and bool(self.window.transcript_box.toPlainText().strip())
+        )
+        command_present = bool(self.window.command_box.toPlainText().strip())
+        self.window.command_copy_button.setEnabled(
+            has_audio and not is_recording and not is_finalizing and command_present
+        )
+        self.window.command_toggle_button.setEnabled(
+            has_audio and not is_recording and not is_finalizing and command_present
         )
         if not is_recording and is_finalizing:
             QTimer.singleShot(220, self.finalize_recorded_audio)
@@ -160,8 +167,9 @@ class DesktopAudioController:
             return
         if self.window.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.window.player.stop()
-        run_target = self.window.context.service.create_run_target()
+        run_target = self.window.context.service.run_service.create_target()
         output_path = run_target.audio_path
+        self.window.source_mode_combo.setCurrentText("Audio")
         media_format = QMediaFormat(QMediaFormat.FileFormat.Wave)
         self.window.recorder.setMediaFormat(media_format)
         self.window.recorder.setOutputLocation(QUrl.fromLocalFile(str(output_path)))
@@ -180,7 +188,9 @@ class DesktopAudioController:
         self.window.language_input.setEnabled(False)
         self.window.details_button.setEnabled(False)
         self.window.transcribe_button.setEnabled(False)
-        self.window.copy_button.setEnabled(False)
+        self.window.source_copy_button.setEnabled(False)
+        self.window.command_copy_button.setEnabled(False)
+        self.window.command_toggle_button.setEnabled(False)
         self.window._refresh_details_panel()
 
     @Slot()
@@ -205,7 +215,9 @@ class DesktopAudioController:
             self.window.language_input.setEnabled(False)
             self.window.details_button.setEnabled(False)
             self.window.transcribe_button.setEnabled(False)
-            self.window.copy_button.setEnabled(False)
+            self.window.source_copy_button.setEnabled(False)
+            self.window.command_copy_button.setEnabled(False)
+            self.window.command_toggle_button.setEnabled(False)
 
     @Slot()
     def play_audio(self) -> None:
@@ -238,6 +250,7 @@ class DesktopAudioController:
 
         self.window.current_audio_path = Path(path)
         self.window.current_run_dir = None
+        self.window.source_mode_combo.setCurrentText("Audio")
         self.window._record_finalize_path = None
         self.window._record_finalize_size = None
         self.window._record_finalize_attempts = 0

@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING
 
 from app.desktop_ui.qt import QObject, QThread, Slot
 from app.desktop_ui.tasks import BackgroundTask
+from schemas.command_run import CommandRun
 from schemas.runtime import PipelinePreparationResult
-from schemas.transcription import TranscriptionRun
 
 if TYPE_CHECKING:
     from app.desktop_ui.window import VoiceDesktopWindow
@@ -17,6 +17,13 @@ class DesktopTranscriptionController(QObject):
     def __init__(self, window: VoiceDesktopWindow) -> None:
         super().__init__(window)
         self.window = window
+
+    @Slot()
+    def run_primary_action(self) -> None:
+        if self.window._is_text_mode():
+            self.normalize_current_text()
+            return
+        self.transcribe_current_audio()
 
     @Slot()
     def transcribe_current_audio(self) -> None:
@@ -49,12 +56,41 @@ class DesktopTranscriptionController(QObject):
             kind="transcribe",
         )
 
+    @Slot()
+    def normalize_current_text(self) -> None:
+        if self.window.context is None:
+            self.window.show_info_dialog(
+                "Initializing",
+                "The local runtime is still starting. Please wait a moment.",
+            )
+            return
+        if self.window._worker_kind == "transcribe":
+            self.request_stop_transcription()
+            return
+
+        source_text = self.window.transcript_box.toPlainText().strip()
+        if not source_text:
+            self.window.show_info_dialog("No text", "Enter a command first.")
+            return
+
+        language = self.window.language_input.text().strip() or None
+        self.run_background(
+            fn=lambda: self.window.context.service.normalize_text_input(
+                source_text,
+                language=language,
+            ),
+            on_success=self.show_transcription_result,
+            busy_message="Normalizing" if language else "Detecting language",
+            kind="transcribe",
+        )
+
     def run_background(
         self,
         fn: Callable[[], object],
         on_success: Callable[[object], None],
         busy_message: str,
         kind: str | None = None,
+        on_error: Callable[[str], None] | None = None,
     ) -> None:
         if self.window._worker_thread is not None:
             self.window.show_info_dialog("Busy", "Another operation is already running.")
@@ -72,7 +108,7 @@ class DesktopTranscriptionController(QObject):
         worker.finished.connect(on_success)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
-        worker.failed.connect(self.show_error)
+        worker.failed.connect(on_error or self.show_error)
         worker.failed.connect(thread.quit)
         worker.failed.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
@@ -99,9 +135,17 @@ class DesktopTranscriptionController(QObject):
             self.window._refresh_details_panel()
             return
 
-        self.window.last_run = TranscriptionRun.model_validate(result)
-        self.window.transcript_box.setPlainText(self.window.last_run.metadata.transcript)
-        self.window.copy_button.setEnabled(bool(self.window.last_run.metadata.transcript.strip()))
+        self.window.last_run = CommandRun.model_validate(result)
+        self.window._set_transcript_edit_mode(False)
+        self.window.transcript_box.setPlainText(self.window.last_run.metadata.source_text)
+        self.window.command_box.setPlainText(self.window.last_run.metadata.command_en)
+        self.window.current_run_dir = Path(self.window.last_run.artifacts.run_dir)
+        if self.window.last_run.metadata.source_modality == "text":
+            self.window.source_mode_combo.setCurrentText("Text")
+            self.window.audio_summary.setText("Direct text input mode.")
+        else:
+            self.window.source_mode_combo.setCurrentText("Audio")
+        self.window._refresh_transcript_action_buttons()
         if prepare_payload is not None:
             skipped_components = [
                 component
@@ -133,6 +177,74 @@ class DesktopTranscriptionController(QObject):
         self.window._discard_worker_result = True
         self.window.transcribe_button.setEnabled(False)
         self.window._show_notification("Stopping", tone="warning", animate=True, auto_hide_ms=0)
+
+    @Slot()
+    def toggle_transcript_edit(self) -> None:
+        if self.window.last_run is None:
+            self.window.show_info_dialog("No source cmd", "Run audio or normalize text first.")
+            return
+        if self.window._is_editing_transcript:
+            self.save_transcript_edits()
+            return
+        self.window._set_transcript_edit_mode(True)
+
+    def save_transcript_edits(self) -> None:
+        if self.window.context is None or self.window.last_run is None:
+            return
+
+        source_text = self.window.transcript_box.toPlainText().strip()
+        if not source_text:
+            self.window.show_info_dialog("Empty source cmd", "Source cmd cannot be empty.")
+            return
+
+        run_dir = Path(self.window.last_run.artifacts.run_dir)
+        language = self.window.language_input.text().strip() or None
+
+        self.run_background(
+            fn=lambda: self.window.context.service.update_run_source_text(
+                run_dir,
+                source_text,
+                language=language,
+            ),
+            on_success=self.show_saved_transcript_result,
+            on_error=self.show_save_error,
+            busy_message="Saving" if language else "Detecting language",
+            kind="save_edit",
+        )
+
+    @Slot(object)
+    def show_saved_transcript_result(self, result: object) -> None:
+        self.window.last_run = CommandRun.model_validate(result)
+        self.window._set_transcript_edit_mode(False)
+        self.window.transcript_box.setPlainText(self.window.last_run.metadata.source_text)
+        self.window.command_box.setPlainText(self.window.last_run.metadata.command_en)
+        self.window._refresh_transcript_action_buttons()
+        translation_status = self.window.last_run.metadata.translation_status
+        translation_message = self.window.last_run.metadata.translation_message or ""
+        if translation_status == "error":
+            lowered_message = translation_message.lower()
+            if "detect" in lowered_message or "ambiguous" in lowered_message:
+                message = "Detection failed"
+            elif "language pair" in lowered_message or "does not match" in lowered_message:
+                message = "Unsupported language"
+            else:
+                message = "Translation failed"
+            self.window._show_notification(message, tone="error", auto_hide_ms=3200)
+        else:
+            self.window._show_notification("Saved", tone="success", auto_hide_ms=1600)
+        self.window._refresh_details_panel()
+
+    @Slot(str)
+    def show_save_error(self, message: str) -> None:
+        pair_messages = (
+            "language pair",
+            "not supported",
+            "Local translation model is not available",
+        )
+        if any(fragment in message for fragment in pair_messages):
+            self.window._show_notification("Unsupported language", tone="error", auto_hide_ms=3200)
+            return
+        self.show_error(message)
 
     def transcribe_with_auto_prepare(
         self,
