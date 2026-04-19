@@ -73,6 +73,17 @@ class TranslationRouteSettings(TranslationSettings):
     name: str | None = None
 
 
+class PCSSettings(ModelComponentSettings):
+    enabled: bool = True
+    family: str = "punctuation"
+    provider: str = "transformers"
+    model_name: str = "1-800-BAD-CODE/xlm-roberta_punctuation_fullstop_truecase"
+    device: str = "auto"
+    cpu_threads: int = Field(default=0, ge=0)
+    max_length: int = Field(default=256, ge=16)
+    download_root: Path | None = None
+
+
 class StorageSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -102,6 +113,7 @@ class AppSettings(BaseModel):
     asr: ASRSettings = ASRSettings()
     translation: TranslationSettings = TranslationSettings()
     translation_routes: list[TranslationRouteSettings] = Field(default_factory=list)
+    pcs: PCSSettings = PCSSettings()
     storage: StorageSettings = StorageSettings()
     logging: LoggingSettings = LoggingSettings()
     api: APISettings = APISettings()

@@ -33,6 +33,18 @@ class CommandSpan(BaseModel):
     translation_model_name: str | None = None
 
 
+class PCSNormalizationResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    text: str
+    status: str = "skipped"
+    message: str | None = None
+    pcs_family: str | None = None
+    pcs_provider: str | None = None
+    pcs_model_name: str | None = None
+    inference_seconds: float | None = Field(default=None, ge=0)
+
+
 class NormalizedCommand(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -46,6 +58,12 @@ class NormalizedCommand(BaseModel):
     translation_provider: str | None = None
     translation_model_name: str | None = None
     translation_inference_seconds: float | None = Field(default=None, ge=0)
+    pcs_status: str = "skipped"
+    pcs_message: str | None = None
+    pcs_family: str | None = None
+    pcs_provider: str | None = None
+    pcs_model_name: str | None = None
+    pcs_inference_seconds: float | None = Field(default=None, ge=0)
 
 
 class CommandNormalizationResult(BaseModel):

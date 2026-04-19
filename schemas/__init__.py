@@ -4,12 +4,15 @@ from schemas.command import (
     CommandSpan,
     LanguageResolution,
     NormalizedCommand,
+    PCSNormalizationResult,
 )
+from schemas.command_run import CommandArtifacts, CommandMetadata, CommandRun
 from schemas.config import (
     APISettings,
     AppSettings,
     ASRSettings,
     LoggingSettings,
+    PCSSettings,
     StorageSettings,
     TranslationRouteSettings,
     TranslationSettings,
@@ -21,10 +24,7 @@ from schemas.runtime import (
     PipelinePreparationResult,
 )
 from schemas.transcription import (
-    RunArtifacts,
-    RunMetadata,
     TranscriptionResult,
-    TranscriptionRun,
     TranscriptionSegment,
     TranslationResult,
 )
@@ -43,14 +43,16 @@ __all__ = [
     "ModelRequest",
     "ModelPreparationResult",
     "NormalizedCommand",
+    "PCSNormalizationResult",
+    "PCSSettings",
     "PipelinePreparationResult",
-    "RunArtifacts",
-    "RunMetadata",
+    "CommandArtifacts",
+    "CommandMetadata",
+    "CommandRun",
     "StorageSettings",
     "TranslationRouteSettings",
     "TranslationResult",
     "TranslationSettings",
     "TranscriptionResult",
-    "TranscriptionRun",
     "TranscriptionSegment",
 ]
