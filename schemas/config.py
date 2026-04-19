@@ -67,6 +67,12 @@ class TranslationSettings(ModelComponentSettings):
         return normalize_language_code(value) or "en"
 
 
+class TranslationRouteSettings(TranslationSettings):
+    enabled: bool = True
+    priority: int = Field(default=100, ge=0)
+    name: str | None = None
+
+
 class StorageSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -95,6 +101,7 @@ class AppSettings(BaseModel):
     app_name: str = "iVoice"
     asr: ASRSettings = ASRSettings()
     translation: TranslationSettings = TranslationSettings()
+    translation_routes: list[TranslationRouteSettings] = Field(default_factory=list)
     storage: StorageSettings = StorageSettings()
     logging: LoggingSettings = LoggingSettings()
     api: APISettings = APISettings()
