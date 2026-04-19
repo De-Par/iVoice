@@ -9,13 +9,18 @@ from core.logging import configure_logging
 from core.settings import load_settings
 from core.translation import build_translation_engine
 from schemas.config import AppSettings
+from services.command_normalization import CommandNormalizationService
 from services.prepare_model import (
     build_asr_model_descriptor,
     build_asr_model_request,
     build_translation_model_descriptor,
     build_translation_model_request,
+    build_translation_route_descriptors,
 )
+from services.run_service import RunService
+from services.run_store import RunArtifactStore
 from services.transcription import TranscriptionService
+from services.translation_router import TranslationRouter
 
 
 @dataclass(frozen=True)
@@ -39,14 +44,28 @@ def build_app_context(
     configure_logging(settings.logging)
     asr_descriptor = build_asr_model_descriptor(settings)
     translation_descriptor = build_translation_model_descriptor(settings)
+    translation_route_descriptors = build_translation_route_descriptors(settings)[1:]
     asr_engine = build_asr_engine(asr_descriptor)
     translation_engine = build_translation_engine(translation_descriptor)
+    translation_router = TranslationRouter(
+        default_descriptor=translation_descriptor,
+        route_descriptors=translation_route_descriptors,
+    )
+    command_normalization_service = CommandNormalizationService(
+        settings=settings,
+        translation_router=translation_router,
+    )
+    run_store = RunArtifactStore()
+    run_service = RunService(settings=settings, run_store=run_store)
     service = TranscriptionService(
         settings=settings,
         asr_engine=asr_engine,
         translation_engine=translation_engine,
         asr_request=build_asr_model_request(settings),
         translation_request=build_translation_model_request(settings),
+        command_normalization_service=command_normalization_service,
+        run_store=run_store,
+        run_service=run_service,
     )
     should_warm_up = warm_up_on_startup
     if should_warm_up is None:

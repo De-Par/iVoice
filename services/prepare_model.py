@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 from rich.console import Console
 
-from schemas.config import AppSettings, ASRSettings, TranslationSettings
+from schemas.config import AppSettings, ASRSettings, TranslationRouteSettings, TranslationSettings
 from schemas.model import ModelDescriptor, ModelRequest
 from schemas.runtime import ModelPreparationResult, PipelinePreparationResult
 from services.asr_assets import FasterWhisperAssetPreparer
@@ -120,6 +120,64 @@ def build_translation_model_descriptor(
         cpu_threads=resolved_settings.cpu_threads,
         max_length=resolved_settings.max_length,
     )
+
+
+def build_translation_route_descriptors(settings: AppSettings) -> list[ModelDescriptor]:
+    descriptors = [
+        build_translation_model_descriptor(
+            settings,
+            family=settings.translation.family,
+            provider=settings.translation.provider,
+            model_name=settings.translation.model_name,
+            source_language=settings.translation.source_language,
+            target_language=settings.translation.target_language,
+            local_files_only=settings.translation.local_files_only,
+        )
+    ]
+    descriptors.extend(
+        _build_translation_descriptor_from_route(route)
+        for route in sorted(settings.translation_routes, key=lambda route: route.priority)
+        if route.enabled
+    )
+
+    unique_descriptors: list[ModelDescriptor] = []
+    seen_keys: set[tuple[str, str, str, str | None, str | None, str | None]] = set()
+    for descriptor in descriptors:
+        key = (
+            descriptor.family,
+            descriptor.provider,
+            descriptor.model_name,
+            descriptor.source_language,
+            descriptor.target_language,
+            str(descriptor.download_root) if descriptor.download_root is not None else None,
+        )
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        unique_descriptors.append(descriptor)
+    return unique_descriptors
+
+
+def build_translation_route_requests(
+    settings: AppSettings,
+    *,
+    local_files_only: bool | None = None,
+    force_download: bool = False,
+) -> list[ModelRequest]:
+    requests = []
+    for descriptor in build_translation_route_descriptors(settings):
+        effective_descriptor = descriptor
+        if local_files_only is not None:
+            effective_descriptor = descriptor.model_copy(
+                update={"local_files_only": local_files_only}
+            )
+        requests.append(
+            ModelRequest(
+                descriptor=effective_descriptor,
+                force_download=force_download,
+            )
+        )
+    return requests
 
 
 def build_asr_model_request(
@@ -238,6 +296,26 @@ def resolve_translation_settings(
     return resolved_settings
 
 
+def _build_translation_descriptor_from_route(route: TranslationRouteSettings) -> ModelDescriptor:
+    source_language = route.source_language
+    if route.family == "opus_mt" and source_language is None:
+        source_language = infer_opus_mt_source_language(route.model_name)
+    return ModelDescriptor(
+        task="translation",
+        family=route.family,
+        provider=route.provider,
+        model_name=route.model_name,
+        model_path=route.model_path,
+        download_root=route.download_root,
+        local_files_only=route.local_files_only,
+        source_language=source_language,
+        target_language=route.target_language,
+        device=route.device,
+        cpu_threads=route.cpu_threads,
+        max_length=route.max_length,
+    )
+
+
 def prepare_model(
     request: ModelRequest,
     console: Console | None = None,
@@ -306,14 +384,9 @@ def prepare_configured_models(
     ]
 
     if settings.translation.enabled:
-        requests.append(
-            build_translation_model_request(
+        requests.extend(
+            build_translation_route_requests(
                 settings,
-                family=settings.translation.family,
-                provider=settings.translation.provider,
-                model_name=settings.translation.model_name,
-                source_language=settings.translation.source_language,
-                target_language=settings.translation.target_language,
                 local_files_only=False,
                 force_download=force_download,
             )

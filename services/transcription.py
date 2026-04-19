@@ -1,11 +1,8 @@
 from __future__ import annotations
 
-import json
 import logging
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
-from uuid import uuid4
 
 from rich.console import Console
 
@@ -17,27 +14,23 @@ from core.audio import (
     maybe_normalize_audio,
     save_uploaded_audio,
 )
-from core.language import normalize_language_code
+from core.language import LanguageDetectionError, normalize_language_code
 from core.translation.base import BaseTranslationEngine
+from schemas.command import CommandNormalizationResult
 from schemas.config import AppSettings
 from schemas.model import ModelRequest
 from schemas.runtime import ModelPreparationResult, PipelinePreparationResult
-from schemas.transcription import RunMetadata, TranscriptionRun, TranslationResult
+from schemas.transcription import RunArtifacts, RunMetadata, TranscriptionRun
+from services.command_normalization import CommandNormalizationService
 from services.prepare_model import (
     build_skipped_preparation_result,
     prepare_configured_models,
     prepare_model,
 )
+from services.run_service import RunInputTarget, RunService
+from services.run_store import RunArtifactStore
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class RunInputTarget:
-    run_id: str
-    timestamp: datetime
-    run_dir: Path
-    audio_path: Path
 
 
 class TranscriptionService:
@@ -48,24 +41,18 @@ class TranscriptionService:
         translation_engine: BaseTranslationEngine,
         asr_request: ModelRequest,
         translation_request: ModelRequest,
+        command_normalization_service: CommandNormalizationService,
+        run_store: RunArtifactStore,
+        run_service: RunService,
     ) -> None:
         self.settings = settings
         self.asr_engine = asr_engine
         self.translation_engine = translation_engine
         self.asr_request = asr_request
         self.translation_request = translation_request
-
-    def create_run_target(self) -> RunInputTarget:
-        timestamp = datetime.now(UTC)
-        run_id = f"{timestamp.strftime('%Y%m%d_%H%M%S')}_{uuid4().hex[:8]}"
-        run_dir = self.settings.storage.runs_dir / run_id
-        run_dir.mkdir(parents=True, exist_ok=False)
-        return RunInputTarget(
-            run_id=run_id,
-            timestamp=timestamp,
-            run_dir=run_dir,
-            audio_path=run_dir / "input.wav",
-        )
+        self.command_normalization_service = command_normalization_service
+        self.run_store = run_store
+        self.run_service = run_service
 
     def transcribe_bytes(
         self,
@@ -73,7 +60,7 @@ class TranscriptionService:
         filename: str | None = None,
         language: str | None = None,
     ) -> TranscriptionRun:
-        target = self.create_run_target()
+        target = self.run_service.create_target()
         logger.info(
             "Saving uploaded audio for run_id=%s filename=%s",
             target.run_id,
@@ -88,7 +75,7 @@ class TranscriptionService:
         language: str | None = None,
     ) -> TranscriptionRun:
         source = ensure_wav_path(Path(source_path))
-        target = self.create_run_target()
+        target = self.run_service.create_target()
         logger.info("Copying source audio for run_id=%s source=%s", target.run_id, source)
         copy_audio_file(source, target.audio_path)
         return self._process_run_audio(target, language=language)
@@ -99,21 +86,50 @@ class TranscriptionService:
         audio_path: str | Path,
         language: str | None = None,
     ) -> TranscriptionRun:
-        resolved_run_dir = Path(run_dir).expanduser().resolve()
-        resolved_audio_path = ensure_wav_path(Path(audio_path))
-        if not resolved_audio_path.is_relative_to(resolved_run_dir):
-            raise ValueError("Expected recorded audio to live inside the run directory.")
-        target = RunInputTarget(
-            run_id=resolved_run_dir.name,
-            timestamp=datetime.now(UTC),
-            run_dir=resolved_run_dir,
-            audio_path=resolved_audio_path,
-        )
+        target = self.run_service.build_existing_audio_target(run_dir, audio_path)
         return self._process_run_audio(target, language=language)
 
     def transcribe_last(self, language: str | None = None) -> TranscriptionRun:
-        latest_audio_path = self.get_last_audio_path()
+        latest_audio_path = self.run_service.get_last_audio_path()
         return self.transcribe_file(latest_audio_path, language=language)
+
+    def normalize_text_input(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+    ) -> TranscriptionRun:
+        target = self.run_service.create_target()
+        return self._write_text_run(
+            run_dir=target.run_dir,
+            text=text,
+            timestamp=target.timestamp,
+            audio_path="",
+            language=language,
+            existing_metadata=None,
+        )
+
+    def normalize_command_text(
+        self,
+        text: str,
+        *,
+        language: str | None = None,
+        fallback_language: str | None = None,
+    ) -> CommandNormalizationResult:
+        return self.command_normalization_service.normalize_command(
+            text,
+            modality="text",
+            language=language,
+            fallback_language=(
+                fallback_language
+                or self.settings.translation.source_language
+                or self.settings.asr.language
+            ),
+            allow_detection=language is None,
+            allow_segmented_fallback=language is None,
+            source_if_explicit="explicit",
+            source_if_fallback="config",
+        )
 
     def prepare_asr_assets(
         self,
@@ -159,7 +175,7 @@ class TranscriptionService:
         components = [self.asr_engine.prepare()]
         if self.settings.translation.enabled:
             try:
-                components.append(self.translation_engine.prepare())
+                components.extend(self.command_normalization_service.warm_up_routes())
             except RuntimeError as error:
                 logger.warning("Skipping translation warm-up: %s", error)
                 components.append(
@@ -183,19 +199,23 @@ class TranscriptionService:
     def prepare_asr(self) -> ModelPreparationResult:
         return self.warm_up_asr()
 
-    def get_last_audio_path(self) -> Path:
-        run_dirs = sorted(
-            [path for path in self.settings.storage.runs_dir.iterdir() if path.is_dir()],
-            key=lambda path: path.name,
+    def update_run_transcript(
+        self,
+        run_dir: str | Path,
+        transcript: str,
+        *,
+        language: str | None = None,
+    ) -> TranscriptionRun:
+        resolved_run_dir = Path(run_dir).expanduser().resolve()
+        existing_metadata = self.run_service.load_metadata(resolved_run_dir)
+        return self._write_text_run(
+            run_dir=resolved_run_dir,
+            text=transcript,
+            timestamp=existing_metadata.timestamp,
+            audio_path=existing_metadata.audio_path,
+            language=language,
+            existing_metadata=existing_metadata,
         )
-        if not run_dirs:
-            raise FileNotFoundError("No runs available in runs directory.")
-
-        latest_run_dir = run_dirs[-1]
-        audio_path = latest_run_dir / "input.wav"
-        if not audio_path.exists():
-            raise FileNotFoundError(f"No input.wav found in latest run: {latest_run_dir}")
-        return audio_path
 
     def _process_run_audio(
         self,
@@ -235,95 +255,284 @@ class TranscriptionService:
                 target.audio_path,
                 language=effective_language,
             )
-            translation, translation_message = self._translate_transcript(
+            normalization_result = self._normalize_audio_command(
                 transcription.transcript,
-                transcription.language,
+                asr_language=transcription.language,
             )
-            transcript_en = (
-                translation.text if translation is not None else transcription.transcript
-            )
+            transcript_en = normalization_result.normalized.text
         except Exception:
             logger.exception("Speech pipeline failed for run_id=%s", target.run_id)
             raise
 
-        transcript_path = target.run_dir / "transcript.txt"
-        transcript_en_path = target.run_dir / "transcript.en.txt"
-        metadata_path = target.run_dir / "metadata.json"
+        artifacts = self._build_run_artifacts(
+            run_dir=target.run_dir,
+            audio_path=target.audio_path,
+        )
+        self.run_store.write_command_artifacts(
+            artifacts=artifacts,
+            source_text=transcription.transcript,
+            normalized_text=transcript_en,
+            normalization_result=normalization_result,
+        )
+        self.run_store.write_transcript(artifacts, transcription.transcript)
+        self.run_store.write_transcript_en(artifacts, transcript_en)
 
-        transcript_path.write_text(transcription.transcript + "\n", encoding="utf-8")
-        transcript_en_path.write_text(transcript_en + "\n", encoding="utf-8")
-
-        metadata = RunMetadata(
-            id=target.run_id,
+        metadata = self._build_run_metadata(
+            artifacts=artifacts,
+            run_id=target.run_id,
             timestamp=target.timestamp,
             duration_seconds=duration_seconds,
             sample_rate=sample_rate,
-            audio_path=str(target.audio_path.resolve()),
-            language=transcription.language,
+            source_text=transcription.transcript,
+            source_modality="audio",
             transcript=transcription.transcript,
             transcript_en=transcript_en,
-            target_language=(
-                translation.target_language
-                if translation is not None
-                else self.translation_engine.normalize_language_code(
-                    self.settings.translation.target_language
-                )
-                or "en"
-            ),
-            translation_status=(
-                "translated"
-                if translation is not None
-                else ("skipped" if self.settings.translation.enabled else "disabled")
-            ),
-            translation_message=translation_message,
+            normalization_result=normalization_result,
             inference_seconds=transcription.inference_seconds,
             asr_family=transcription.asr_family,
             asr_provider=transcription.asr_provider,
             asr_model_name=transcription.model_name,
-            translation_family=translation.translation_family if translation else None,
-            translation_provider=translation.translation_provider if translation else None,
-            translation_model_name=translation.model_name if translation else None,
-            translation_inference_seconds=translation.inference_seconds if translation else None,
         )
-        metadata_path.write_text(
-            json.dumps(metadata.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        self.run_store.write_metadata(artifacts, metadata)
 
         logger.info(
             "Completed speech pipeline run_id=%s duration=%.2fs asr=%.2fs translation=%s",
             target.run_id,
             duration_seconds,
             transcription.inference_seconds,
-            f"{translation.inference_seconds:.2f}s" if translation is not None else "<disabled>",
+            (
+                f"{normalization_result.normalized.translation_inference_seconds:.2f}s"
+                if normalization_result.normalized.translation_inference_seconds is not None
+                else f"<{normalization_result.normalized.status}>"
+            ),
         )
 
-        return TranscriptionRun(
-            run_dir=str(target.run_dir.resolve()),
-            audio_path=str(target.audio_path.resolve()),
-            transcript_path=str(transcript_path.resolve()),
-            transcript_en_path=str(transcript_en_path.resolve()),
-            metadata_path=str(metadata_path.resolve()),
-            metadata=metadata,
-        )
+        return self.run_store.build_run(artifacts, metadata)
 
-    def _translate_transcript(
+    def _normalize_audio_command(
         self,
         transcript: str,
-        language: str | None,
-    ) -> tuple[TranslationResult | None, str | None]:
-        if not self.settings.translation.enabled:
-            return None, None
-
+        *,
+        asr_language: str | None,
+    ) -> CommandNormalizationResult:
         try:
-            return (
-                self.translation_engine.translate(
-                    transcript,
-                    source_language=language or self.settings.translation.source_language,
-                    target_language=self.settings.translation.target_language,
-                ),
-                None,
+            return self.command_normalization_service.normalize_command(
+                transcript,
+                modality="audio",
+                language=asr_language,
+                fallback_language=self.settings.translation.source_language,
+                allow_detection=False,
+                allow_segmented_fallback=True,
+                source_if_explicit="asr",
+                source_if_fallback="config",
             )
         except RuntimeError as error:
-            logger.warning("Translation stage skipped: %s", error)
-            return None, str(error)
+            logger.warning("Command normalization stage skipped: %s", error)
+            return self.command_normalization_service.build_error_result(
+                transcript,
+                modality="audio",
+                message=str(error),
+                normalized_text=transcript,
+                language=asr_language,
+                language_source="asr" if asr_language else "config",
+            )
+
+    def _normalize_manual_command(
+        self,
+        transcript: str,
+        *,
+        explicit_language: str | None,
+        fallback_language: str | None,
+        existing_command_en: str,
+    ) -> CommandNormalizationResult:
+        try:
+            return self.command_normalization_service.normalize_command(
+                transcript,
+                modality="text",
+                language=explicit_language,
+                fallback_language=fallback_language,
+                allow_detection=explicit_language is None,
+                source_if_explicit="explicit",
+                source_if_fallback="config",
+            )
+        except LanguageDetectionError as error:
+            return self.command_normalization_service.build_error_result(
+                transcript,
+                modality="text",
+                message=str(error),
+                normalized_text=existing_command_en,
+                language=None,
+                language_source="unknown",
+            )
+        except RuntimeError as error:
+            return self.command_normalization_service.build_error_result(
+                transcript,
+                modality="text",
+                message=str(error),
+                normalized_text=existing_command_en,
+                language=explicit_language or fallback_language,
+                language_source="explicit" if explicit_language else "config",
+            )
+
+    def _write_text_run(
+        self,
+        *,
+        run_dir: Path,
+        text: str,
+        timestamp: datetime,
+        audio_path: str,
+        language: str | None,
+        existing_metadata: RunMetadata | None,
+    ) -> TranscriptionRun:
+        artifacts = self._build_run_artifacts(
+            run_dir=run_dir,
+            audio_path=audio_path,
+        )
+
+        normalized_transcript = text.strip()
+        if not normalized_transcript:
+            raise ValueError("Transcript cannot be empty.")
+
+        self.run_store.write_transcript(artifacts, normalized_transcript)
+
+        explicit_language = normalize_language_code(language)
+        fallback_language = (
+            normalize_language_code(existing_metadata.language)
+            if existing_metadata is not None and existing_metadata.language is not None
+            else self.settings.translation.source_language or self.settings.asr.language
+        )
+        normalization_result = self._normalize_manual_command(
+            normalized_transcript,
+            explicit_language=explicit_language,
+            fallback_language=fallback_language,
+            existing_command_en=(
+                existing_metadata.command_en
+                if existing_metadata is not None and existing_metadata.command_en
+                else (
+                    existing_metadata.transcript_en
+                    if existing_metadata is not None
+                    else normalized_transcript
+                )
+            ),
+        )
+        self.run_store.write_command_artifacts(
+            artifacts=artifacts,
+            source_text=normalized_transcript,
+            normalized_text=normalization_result.normalized.text,
+            normalization_result=normalization_result,
+        )
+        transcript_en = normalization_result.normalized.text
+        should_write_normalized = (
+            normalization_result.normalized.status != "error"
+            or not self.run_store.transcript_en_exists(artifacts)
+        )
+        if should_write_normalized:
+            self.run_store.write_transcript_en(artifacts, transcript_en)
+
+        existing_id = existing_metadata.id if existing_metadata is not None else run_dir.name
+        updated_metadata = self._build_run_metadata(
+            artifacts=artifacts,
+            run_id=existing_id,
+            timestamp=timestamp,
+            duration_seconds=0.0,
+            sample_rate=1,
+            source_text=normalized_transcript,
+            source_modality="text",
+            transcript=normalized_transcript,
+            transcript_en=transcript_en,
+            normalization_result=normalization_result,
+            inference_seconds=0.0,
+            asr_family=self.asr_request.descriptor.family,
+            asr_provider=self.asr_request.descriptor.provider,
+            asr_model_name=self.asr_request.descriptor.model_name,
+            existing_metadata=existing_metadata,
+        )
+        self.run_store.write_metadata(artifacts, updated_metadata)
+
+        return self.run_store.build_run(artifacts, updated_metadata)
+
+    def _build_run_artifacts(
+        self,
+        *,
+        run_dir: Path,
+        audio_path: str | Path,
+    ) -> RunArtifacts:
+        return self.run_store.build_artifacts(
+            run_dir=run_dir,
+            audio_path=audio_path,
+        )
+
+    def _build_normalization_metadata_fields(
+        self,
+        *,
+        artifacts: RunArtifacts,
+        source_text: str,
+        source_modality: str,
+        transcript: str,
+        transcript_en: str,
+        normalization_result: CommandNormalizationResult,
+    ) -> dict[str, object]:
+        return {
+            "source_text": source_text,
+            "source_modality": source_modality,
+            "language": normalization_result.source.language,
+            "language_source": normalization_result.source.language_source,
+            "transcript": transcript,
+            "transcript_en": transcript_en,
+            "command_en": normalization_result.normalized.text,
+            "normalization_spans_path": artifacts.normalization_spans_path,
+            "normalization_span_count": len(normalization_result.spans),
+            "target_language": normalization_result.normalized.target_language,
+            "normalization_status": normalization_result.normalized.status,
+            "normalization_message": normalization_result.normalized.message,
+            "translation_status": normalization_result.normalized.status,
+            "translation_message": normalization_result.normalized.message,
+            "translation_family": normalization_result.normalized.translation_family,
+            "translation_provider": normalization_result.normalized.translation_provider,
+            "translation_model_name": normalization_result.normalized.translation_model_name,
+            "translation_inference_seconds": (
+                normalization_result.normalized.translation_inference_seconds
+            ),
+        }
+
+    def _build_run_metadata(
+        self,
+        *,
+        artifacts: RunArtifacts,
+        run_id: str,
+        timestamp: datetime,
+        duration_seconds: float,
+        sample_rate: int,
+        source_text: str,
+        source_modality: str,
+        transcript: str,
+        transcript_en: str,
+        normalization_result: CommandNormalizationResult,
+        inference_seconds: float,
+        asr_family: str,
+        asr_provider: str,
+        asr_model_name: str,
+        existing_metadata: RunMetadata | None = None,
+    ) -> RunMetadata:
+        payload = {
+            "id": run_id,
+            "timestamp": timestamp,
+            "duration_seconds": duration_seconds,
+            "sample_rate": sample_rate,
+            "audio_path": artifacts.audio_path,
+            "inference_seconds": inference_seconds,
+            "asr_family": asr_family,
+            "asr_provider": asr_provider,
+            "asr_model_name": asr_model_name,
+            **self._build_normalization_metadata_fields(
+                artifacts=artifacts,
+                source_text=source_text,
+                source_modality=source_modality,
+                transcript=transcript,
+                transcript_en=transcript_en,
+                normalization_result=normalization_result,
+            ),
+        }
+        if existing_metadata is not None:
+            return existing_metadata.model_copy(update=payload)
+        return RunMetadata(**payload)
