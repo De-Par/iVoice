@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 LANGUAGE_ALIASES = {
     "eng": "en",
@@ -16,7 +17,7 @@ LANGUAGE_ALIASES = {
 
 
 class LanguageDetectionError(RuntimeError):
-    """Raised when transcript language cannot be determined reliably."""
+    """Raised when source text language cannot be determined reliably"""
 
 
 @dataclass(frozen=True)
@@ -56,61 +57,26 @@ def normalize_language_code(value: str | None) -> str | None:
 def detect_text_language(text: str) -> str:
     normalized = text.strip()
     if not normalized:
-        raise LanguageDetectionError("Transcript is empty.")
-
-    if _count_letters(normalized) < 6:
-        raise LanguageDetectionError(
-            "Transcript is too short for reliable language detection. Specify the language."
-        )
+        raise LanguageDetectionError("Source text is empty.")
 
     script_profile = _build_script_profile(normalized)
     if _is_mixed_script(script_profile):
         raise LanguageDetectionError(
-            "Transcript contains mixed scripts. Specify the language explicitly."
+            "Source text contains mixed scripts. Specify the language explicitly."
         )
+
+    lingua_error: LanguageDetectionError | None = None
+    try:
+        return _detect_with_lingua(normalized)
+    except LanguageDetectionError as error:
+        lingua_error = error
 
     try:
-        from langdetect import DetectorFactory, LangDetectException, detect_langs
-    except ImportError as error:
-        raise LanguageDetectionError(
-            "Language detection runtime is not installed. Reinstall with translation extras."
-        ) from error
-
-    DetectorFactory.seed = 0
-
-    try:
-        candidates = detect_langs(normalized)
-    except LangDetectException as error:
-        raise LanguageDetectionError(
-            "Could not detect transcript language. Specify the language explicitly."
-        ) from error
-
-    normalized_candidates: list[tuple[str, float]] = []
-    for candidate in candidates:
-        language_code = normalize_language_code(candidate.lang)
-        if language_code is None:
-            continue
-        normalized_candidates.append((language_code, float(candidate.prob)))
-
-    if not normalized_candidates:
-        raise LanguageDetectionError(
-            "Could not detect transcript language. Specify the language explicitly."
-        )
-
-    best_language, best_probability = normalized_candidates[0]
-    if best_probability < 0.80:
-        raise LanguageDetectionError(
-            "Transcript language is ambiguous. Specify the language explicitly."
-        )
-
-    if len(normalized_candidates) > 1:
-        _, second_probability = normalized_candidates[1]
-        if best_probability - second_probability < 0.20:
-            raise LanguageDetectionError(
-                "Transcript language is ambiguous. Specify the language explicitly."
-            )
-
-    return best_language
+        return _detect_with_langdetect(normalized)
+    except LanguageDetectionError as error:
+        if lingua_error is not None:
+            raise lingua_error from error
+        raise
 
 
 def analyze_text_language_spans(text: str) -> list[LanguageSpanAnalysis]:
@@ -247,3 +213,86 @@ def _is_mixed_script(profile: ScriptProfile) -> bool:
     dominant = max(profile.latin, profile.cyrillic)
     secondary = min(profile.latin, profile.cyrillic)
     return secondary / dominant >= 0.35
+
+
+@lru_cache(maxsize=1)
+def _get_lingua_detector():
+    try:
+        from lingua import LanguageDetectorBuilder
+    except ImportError:
+        return None
+    return LanguageDetectorBuilder.from_all_spoken_languages().build()
+
+
+def _detect_with_lingua(text: str) -> str:
+    detector = _get_lingua_detector()
+    if detector is None:
+        raise LanguageDetectionError(
+            "Language detection runtime is not installed. Reinstall with translation extras."
+        )
+
+    confidences = detector.compute_language_confidence_values(text)
+    normalized_candidates: list[tuple[str, float]] = []
+    for confidence in confidences:
+        iso_code = getattr(confidence.language, "iso_code_639_1", None)
+        iso_name = getattr(iso_code, "name", None)
+        normalized_name = iso_name.lower() if isinstance(iso_name, str) else None
+        language_code = normalize_language_code(normalized_name)
+        if language_code is None:
+            continue
+        normalized_candidates.append((language_code, float(confidence.value)))
+
+    if not normalized_candidates:
+        raise LanguageDetectionError(
+            "Could not detect source text language. Specify the language explicitly."
+        )
+
+    best_language, best_probability = normalized_candidates[0]
+    if len(normalized_candidates) > 1:
+        _, second_probability = normalized_candidates[1]
+        if best_probability < 0.55 and best_probability - second_probability < 0.10:
+            raise LanguageDetectionError(
+                "Source text language is ambiguous. Specify the language explicitly."
+            )
+
+    return best_language
+
+
+def _detect_with_langdetect(text: str) -> str:
+    try:
+        from langdetect import DetectorFactory, LangDetectException, detect_langs
+    except ImportError as error:
+        raise LanguageDetectionError(
+            "Language detection runtime is not installed. Reinstall with translation extras."
+        ) from error
+
+    DetectorFactory.seed = 0
+
+    try:
+        candidates = detect_langs(text)
+    except LangDetectException as error:
+        raise LanguageDetectionError(
+            "Could not detect source text language. Specify the language explicitly."
+        ) from error
+
+    normalized_candidates: list[tuple[str, float]] = []
+    for candidate in candidates:
+        language_code = normalize_language_code(candidate.lang)
+        if language_code is None:
+            continue
+        normalized_candidates.append((language_code, float(candidate.prob)))
+
+    if not normalized_candidates:
+        raise LanguageDetectionError(
+            "Could not detect source text language. Specify the language explicitly."
+        )
+
+    best_language, best_probability = normalized_candidates[0]
+    if len(normalized_candidates) > 1:
+        _, second_probability = normalized_candidates[1]
+        if best_probability < 0.80 and best_probability - second_probability < 0.20:
+            raise LanguageDetectionError(
+                "Source text language is ambiguous. Specify the language explicitly."
+            )
+
+    return best_language
