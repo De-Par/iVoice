@@ -106,6 +106,7 @@ class FasterWhisperASREngine(BaseASREngine):
             str(audio_path),
             language=language,
             beam_size=self.beam_size,
+            vad_filter=True,  # reduce false detection on low noice
         )
 
         segments: list[TranscriptionSegment] = []
