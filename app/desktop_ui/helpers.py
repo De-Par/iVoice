@@ -35,7 +35,7 @@ def build_details_text(
         sections.append(
             "\n".join(
                 [
-                    "[Model]",
+                    "[ASR]",
                     f"family: {context.service.asr_engine.family_name}",
                     f"provider: {context.service.asr_engine.provider_name}",
                     f"model: {context.service.asr_engine.model_name}",
